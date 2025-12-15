@@ -177,8 +177,8 @@ export const extendedPromptCards = [
 ];
 
 export const suggestionPills = [
-  'Generate a summary report on current asset performance, highlighting areas of improvement',
-  'Analyze supplier performance based on delivery times and quality',
-  '⁠Calculate the average time-to-repair for each asset type'
+  'Show me more details about this data',
+  'What are the trends over time?',
+  'Compare this with other equipment'
 ];
 

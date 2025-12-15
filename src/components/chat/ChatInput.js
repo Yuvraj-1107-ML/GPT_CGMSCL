@@ -1,12 +1,21 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useImperativeHandle, forwardRef } from 'react';
 
 /**
  * Chat Input Component
  * Input area for typing and sending messages
  */
-function ChatInput({ onSend, isSending = false }) {
+const ChatInput = forwardRef(function ChatInput({ onSend, isSending = false }, ref) {
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef(null);
+
+  // Allow parent components to prefill text or focus the input from suggestions/gallery
+  useImperativeHandle(ref, () => ({
+    setValue: (value) => {
+      setInputValue(value);
+      inputRef.current?.focus();
+    },
+    focus: () => inputRef.current?.focus(),
+  }));
 
   const handleSend = () => {
     if (isSending) return;
@@ -60,7 +69,7 @@ function ChatInput({ onSend, isSending = false }) {
       </button>
     </div>
   );
-}
+});
 
 export default ChatInput;
 

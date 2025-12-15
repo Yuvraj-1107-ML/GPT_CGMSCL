@@ -432,45 +432,6 @@
         /* Custom scrollbar styling for extended cards */
         /* Extended cards now flow naturally without internal scrolling */
 
-        /* Hide Sync SharePoint button completely */
-        .sync-button,
-        .sync-sharepoint-btn,
-        .sharepoint-sync,
-        [data-sharepoint="sync"],
-        .sidebar .sync-button {
-            display: none !important;
-        }
-
-        /* Remove the circled floating prompt gallery button */
-        .prompt-gallery-floating-btn,
-        .chat-prompts-fab,
-        .floating-prompt-gallery-btn,
-        .chat-prompt-gallery-floating,
-        [data-floating="gallery-btn"] {
-            display: none !important;
-        }
-
-        /* Remove suggestions from search container */
-        .chat-floating-suggestions,
-        .search-suggestions,
-        .suggestion-pills-container {
-            display: none !important;
-        }
-
-        /* Remove gallery button from search container */
-        .search-container .prompt-gallery-btn,
-        .chat-input-wrapper .gallery-icon,
-        .chat-prompt-gallery-btn {
-            display: none !important;
-        }
-
-        /* Remove front page floating suggestions and prompt gallery */
-        .copilot-search-container .floating-suggestions,
-        .copilot-search-container .suggestion-pill,
-        .copilot-search-container .prompt-gallery-btn {
-            display: none !important;
-        }
-
         /* Ensure all dropdown arrows are gray */
         .prompt-card .dropdown-toggle,
         .card .dropdown-toggle,
@@ -489,6 +450,15 @@
         .dropdown-toggle svg path {
             stroke: #6B7280 !important;
             fill: #6B7280 !important;
+        }
+
+        /* Hide floating suggestions and prompt gallery button on the welcome screen search box
+           so the welcome page layout remains as before. Chat-specific suggestions in the chat
+           area (e.g., .chat-floating-suggestions, .chat-prompt-gallery-btn) stay visible. */
+        .welcome-screen .copilot-search-container .floating-suggestions,
+        .welcome-screen .copilot-search-container .suggestion-pill,
+        .welcome-screen .copilot-search-container .prompt-gallery-btn {
+            display: none !important;
         }
 
         /* Microsoft Copilot-style Search Interface - Front Page Only */
@@ -1187,7 +1157,8 @@
             display: flex;
             align-items: center;
             width: 100%;
-            max-width: 90%;
+            /* Match chat content width and center it, so left/right gaps are equal */
+            max-width: 1000px;
             height: 74px;
             background: #ffffff;
             border: 1px solid #e1e5e9;
@@ -1197,7 +1168,9 @@
             margin: 0 auto;
             margin-bottom: 65px;   
             transition: all 0.3s ease;
-            position: relative;
+            /* Override earlier fixed positioning so input sits within chat column,
+               not full-viewport from edge to edge */
+            position: static;
             overflow: hidden;
         }
 
@@ -1326,10 +1299,7 @@
             display: flex;
             align-items: center;
             background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 24px;
             padding: 8px 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             transition: all 0.3s ease;
         }
 
@@ -1357,15 +1327,18 @@
 
         /* Floating Suggestions and Gallery Button Above Search Box */
         .floating-suggestions-container {
-            position: fixed;
-            bottom: 90px; /* Above the fixed input container */
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            pointer-events: none; /* Allow clicks to pass through container */
+            position: relative; /* stays within chat scroll for scrollable behavior */
+            width: 100%;
             display: flex;
             justify-content: center;
-            padding: 0 1rem;
+            padding: 0.75rem 1rem 0.5rem;
+            pointer-events: none; /* match igl: clicks only on children */
+        }
+
+        /* Inline variant when rendered inside the chat scroll area */
+        .floating-suggestions-container.inline-floating {
+            position: relative;
+            margin-top: 4px;
         }
 
         .floating-suggestions-wrapper {
@@ -1380,13 +1353,12 @@
         }
 
         .floating-suggestion-pill {
-            background: rgba(243, 244, 246, 0.95);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(229, 231, 235, 0.8);
+            border: 1.5px solid rgba(31, 114, 70, 0.35);
             border-radius: 20px;
-            padding: 8px 16px;
+            padding: 10px 16px;
             font-size: 14px;
-            color: #374151;
+            color: #1f7246;
             cursor: pointer;
             transition: all 0.2s ease;
             white-space: nowrap;
@@ -1396,7 +1368,7 @@
         }
 
         .floating-suggestion-pill:hover {
-            background: rgba(229, 231, 235, 0.95);
+            background: rgba(31, 114, 70, 0.06);
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
@@ -3794,9 +3766,10 @@
             letter-spacing: -0.01em;
         }
 
-        /* Bot messages - expand when containing tables for better table display */
+        /* Bot messages - use full chat column width so left/right gaps outside are equal */
         .bot-message .message-bubble {
-            max-width: 95% !important;
+            width: 100%;
+            max-width: 100% !important;
         }
 
         /* Ensure tables take full width of their container */
@@ -5441,8 +5414,7 @@
         .message-bubble .table-scroll-container .markdown-table {
             overflow: visible !important;
             min-width: max-content !important;
-            width: auto !important;
-            /* Ensure table doesn't break out of container */
+            width: 100% !important;
             max-width: none !important;
         }
         
