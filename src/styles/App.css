@@ -958,6 +958,7 @@
 
         .add-attachment-btn,
         .mic-btn,
+        .voice-btn,
         .send-btn {
             width: 36px; /* Increased from 32px to 36px */
             height: 36px; /* Increased from 32px to 36px */
@@ -1070,6 +1071,47 @@
             background: #9ca3af;
             cursor: not-allowed;
             transform: none;
+        }
+
+        /* Voice button styling */
+        .voice-btn {
+            background: #1F7246;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 8px;
+        }
+
+        .voice-btn:hover {
+            background: #2D5016;
+            transform: scale(1.05);
+        }
+
+        .voice-btn.recording {
+            background: #ef4444;
+            animation: pulse 1s infinite;
+        }
+
+        .voice-btn.recording:hover {
+            background: #dc2626;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(1.05);
+            }
         }
 
         /* Enhanced Chat Container Search Interface */
@@ -2066,6 +2108,7 @@
 
             .add-attachment-btn,
             .mic-btn,
+            .voice-btn,
             .send-btn {
                 width: 34px; /* Slightly smaller on mobile */
                 height: 34px;
