@@ -91,26 +91,88 @@ function App() {
       }
 
       const data = await response.json();
-      console.log('API Response Data:', data);
-      console.log('Data structure for Excel:', {
+      console.log('API Response Data (Full):', JSON.stringify(data, null, 2));
+      console.log('API Response Data (Object):', data);
+      
+      // Check multiple possible paths for data rows
+      // API structure: data.data.result.rows (new format) or data.data.rows (old format)
+      let possibleRows = null;
+      if (Array.isArray(data.data?.result?.rows) && data.data.result.rows.length > 0) {
+        possibleRows = data.data.result.rows;
+      } else if (Array.isArray(data.data?.rows) && data.data.rows.length > 0) {
+        possibleRows = data.data.rows;
+      } else if (Array.isArray(data.data) && data.data.length > 0) {
+        possibleRows = data.data;
+      } else if (Array.isArray(data.rows) && data.rows.length > 0) {
+        possibleRows = data.rows;
+      }
+      
+      // Check multiple possible paths for columns
+      // API structure: data.data.result.columns (new format) or data.data.columns (old format)
+      let possibleColumns = null;
+      if (Array.isArray(data.data?.result?.columns) && data.data.result.columns.length > 0) {
+        possibleColumns = data.data.result.columns;
+      } else if (Array.isArray(data.data?.columns) && data.data.columns.length > 0) {
+        possibleColumns = data.data.columns;
+      } else if (Array.isArray(data.data?.columnNames) && data.data.columnNames.length > 0) {
+        possibleColumns = data.data.columnNames;
+      } else if (Array.isArray(data.columns) && data.columns.length > 0) {
+        possibleColumns = data.columns;
+      }
+      
+      // Check what data.data actually contains
+      console.log('Data structure analysis:', {
         hasData: !!data.data,
+        hasResult: !!data.data?.result,
+        hasResultRows: !!data.data?.result?.rows,
+        hasResultColumns: !!data.data?.result?.columns,
+        resultRowsLength: data.data?.result?.rows?.length || 0,
+        resultColumnsLength: data.data?.result?.columns?.length || 0,
+        // Old format checks
         hasRows: !!data.data?.rows,
         hasColumns: !!data.data?.columns,
-        columns: data.data?.columns,
-        rowSample: data.data?.rows?.[0]
+        rowsLength: data.data?.rows?.length || 0,
+        columnsLength: data.data?.columns?.length || 0,
+        // Found values
+        foundRows: !!possibleRows,
+        foundRowsLength: possibleRows?.length || 0,
+        foundColumns: !!possibleColumns,
+        foundColumnsLength: possibleColumns?.length || 0
       });
+      
+      console.log('Data structure for Chart:', {
+        hasVisualization: !!data.visualization,
+        visualization: data.visualization,
+        chartType: data.visualization?.chartType
+      });
+      
+      // Check if visualization config has embedded data
+      let visualizationDataRows = null;
+      let visualizationDataColumns = null;
+      if (data.visualization?.data) {
+        if (Array.isArray(data.visualization.data)) {
+          visualizationDataRows = data.visualization.data;
+        } else if (data.visualization.data.rows) {
+          visualizationDataRows = data.visualization.data.rows;
+          visualizationDataColumns = data.visualization.data.columns;
+        }
+      }
+      
+      // Use visualization data if no other data found
+      const finalDataRows = possibleRows || visualizationDataRows || data.data?.rows || (Array.isArray(data.data) ? data.data : null) || null;
+      const finalDataColumns = possibleColumns || visualizationDataColumns || data.data?.columns || data.data?.columnNames || data.columns || null;
       
       const assistantMessage = {
         role: 'assistant',
         text: data.response || 'No response received.',
         sql_query: data.sql || null,
-        suggestions: data.data?.rows || null,
-        // Store data rows for Excel export (include columns if available)
-        dataRows: data.data?.rows || null,
+        suggestions: finalDataRows || null,
+        // Store data rows for Excel export (try multiple paths including visualization data)
+        dataRows: finalDataRows,
         // Try multiple possible locations for column names
-        dataColumns: data.data?.columns || data.data?.columnNames || data.columns || null,
+        dataColumns: finalDataColumns,
         // Show Excel button if we have tabular data
-        excel_download: !!(data.data?.rows && Array.isArray(data.data.rows) && data.data.rows.length > 0),
+        excel_download: !!(finalDataRows && Array.isArray(finalDataRows) && finalDataRows.length > 0),
         // Store visualization config for chart rendering
         visualization: data.visualization || null,
         timestamp: new Date().toISOString()

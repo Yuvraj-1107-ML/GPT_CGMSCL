@@ -99,7 +99,7 @@ function WelcomeScreen({ onSendMessage, onNewChat }) {
           </div>
         )}
 
-        {/* See More Button */}
+        {/* See More Button
         {!showExtendedCards && (
           <div className="see-more-container">
             <button
@@ -110,7 +110,7 @@ function WelcomeScreen({ onSendMessage, onNewChat }) {
               <span className="show-more-arrow">▼</span>
             </button>
           </div>
-        )}
+        )} */}
       </div>
 
       {/* Prompt Gallery Modal */}

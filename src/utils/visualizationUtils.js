@@ -28,14 +28,29 @@ export function convertVisualizationToECharts(visualization, data) {
     columns = Object.keys(rows[0]);
   }
 
+  // Normalize yAxis to array format
+  let normalizedYAxis = [];
+  if (yAxis) {
+    if (Array.isArray(yAxis)) {
+      normalizedYAxis = yAxis;
+    } else if (typeof yAxis === 'string') {
+      normalizedYAxis = [yAxis];
+    }
+  }
+
   // Find column indices
   const xAxisIndex = columns ? columns.findIndex(col => col === xAxis) : -1;
-  const yAxisIndices = yAxis && Array.isArray(yAxis) 
-    ? yAxis.map(y => columns ? columns.findIndex(col => col === y) : -1)
-    : [];
+  const yAxisIndices = normalizedYAxis.map(y => columns ? columns.findIndex(col => col === y) : -1);
 
   if (xAxisIndex === -1) {
     console.warn('X-axis column not found:', xAxis);
+    return null;
+  }
+
+  // Validate that at least one y-axis column exists (except for pie charts which are handled separately)
+  const hasValidYAxis = yAxisIndices.some(idx => idx >= 0);
+  if (!hasValidYAxis && chartType !== 'pie') {
+    console.warn('No valid y-axis columns found:', normalizedYAxis);
     return null;
   }
 
@@ -68,17 +83,17 @@ export function convertVisualizationToECharts(visualization, data) {
       }
     },
     legend: {
-      data: yAxis || [],
+      data: normalizedYAxis,
       top: 'bottom'
     }
   };
 
   if (chartType === 'bar') {
-    return buildBarChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndices, yAxis, mode, xAxisData);
+    return buildBarChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndices, normalizedYAxis, mode, xAxisData);
   } else if (chartType === 'line') {
-    return buildLineChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndices, yAxis, xAxisData);
+    return buildLineChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndices, normalizedYAxis, xAxisData);
   } else if (chartType === 'pie') {
-    return buildPieChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndices, xAxis, yAxis);
+    return buildPieChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndices, xAxis, normalizedYAxis);
   } else {
     console.warn('Unsupported chart type:', chartType);
     return null;
@@ -97,16 +112,34 @@ function buildBarChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndices
     axisLabel: {
       rotate: xAxisData.length > 10 ? 45 : 0,
       interval: 0
-    }
+    },
+    // Increase category gap to prevent overlap
+    boundaryGap: true
   };
 
   config.yAxis = {
     type: 'value'
   };
 
-  // Build series based on yAxis columns
-  const series = yAxisIndices.map((yIndex, idx) => {
-    const yColumnName = columns && yIndex >= 0 ? columns[yIndex] : (Array.isArray(yAxis) ? yAxis[idx] : 'Value');
+  // Configure grid to allow horizontal expansion
+  config.grid = {
+    left: '10%',
+    right: '10%',
+    top: '15%',
+    bottom: '15%',
+    containLabel: false
+  };
+
+  // Validate that we have valid y-axis indices
+  const validYAxisIndices = yAxisIndices.filter(idx => idx >= 0);
+  if (validYAxisIndices.length === 0) {
+    console.warn('No valid y-axis columns found for bar chart');
+    return null;
+  }
+
+  // Set bar category gap to ensure spacing
+  config.series = validYAxisIndices.map((yIndex, idx) => {
+    const yColumnName = columns && yIndex >= 0 ? columns[yIndex] : (yAxis && yAxis[idx] ? yAxis[idx] : 'Value');
     const seriesData = rows.map(row => {
       let value;
       if (Array.isArray(row)) {
@@ -122,11 +155,12 @@ function buildBarChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndices
       name: yColumnName,
       type: 'bar',
       data: seriesData,
-      stack: mode === 'stacked' ? 'stack' : undefined
+      stack: mode === 'stacked' ? 'stack' : undefined,
+      barCategoryGap: '20%', // Add gap between categories
+      barWidth: '60%' // Control bar width
     };
   });
 
-  config.series = series;
   return config;
 }
 
@@ -142,16 +176,34 @@ function buildLineChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndice
     axisLabel: {
       rotate: xAxisData.length > 10 ? 45 : 0,
       interval: 0
-    }
+    },
+    // Increase category gap to prevent overlap
+    boundaryGap: true
   };
 
   config.yAxis = {
     type: 'value'
   };
 
+  // Configure grid to allow horizontal expansion
+  config.grid = {
+    left: '10%',
+    right: '10%',
+    top: '15%',
+    bottom: '15%',
+    containLabel: false
+  };
+
+  // Validate that we have valid y-axis indices
+  const validYAxisIndices = yAxisIndices.filter(idx => idx >= 0);
+  if (validYAxisIndices.length === 0) {
+    console.warn('No valid y-axis columns found for line chart');
+    return null;
+  }
+
   // Build series based on yAxis columns
-  const series = yAxisIndices.map((yIndex, idx) => {
-    const yColumnName = columns && yIndex >= 0 ? columns[yIndex] : (Array.isArray(yAxis) ? yAxis[idx] : 'Value');
+  const series = validYAxisIndices.map((yIndex, idx) => {
+    const yColumnName = columns && yIndex >= 0 ? columns[yIndex] : (yAxis && yAxis[idx] ? yAxis[idx] : 'Value');
     const seriesData = rows.map(row => {
       let value;
       if (Array.isArray(row)) {
@@ -181,11 +233,12 @@ function buildLineChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndice
 function buildPieChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndices, xAxis, yAxis) {
   const config = { ...baseConfig };
   
-  // For pie chart, use first yAxis as values and xAxis as labels
-  const yIndex = yAxisIndices.length > 0 ? yAxisIndices[0] : -1;
+  // For pie chart, use first valid yAxis as values and xAxis as labels
+  const validYAxisIndices = yAxisIndices.filter(idx => idx >= 0);
+  const yIndex = validYAxisIndices.length > 0 ? validYAxisIndices[0] : -1;
   
   if (yIndex === -1) {
-    console.warn('No y-axis column found for pie chart');
+    console.warn('No valid y-axis column found for pie chart');
     return null;
   }
 
@@ -197,7 +250,7 @@ function buildPieChartConfig(baseConfig, rows, columns, xAxisIndex, yAxisIndices
     } else {
       // Object format
       const xColumnName = columns && xAxisIndex >= 0 ? columns[xAxisIndex] : xAxis;
-      const yColumnName = columns && yIndex >= 0 ? columns[yIndex] : (Array.isArray(yAxis) ? yAxis[0] : 'Value');
+      const yColumnName = columns && yIndex >= 0 ? columns[yIndex] : (yAxis && yAxis[0] ? yAxis[0] : 'Value');
       label = row[xColumnName];
       value = row[yColumnName];
     }

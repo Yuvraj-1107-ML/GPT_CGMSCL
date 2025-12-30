@@ -1338,7 +1338,7 @@
         /* Inline variant when rendered inside the chat scroll area */
         .floating-suggestions-container.inline-floating {
             position: relative;
-            margin-top: 4px;
+            margin-top: -10px;
         }
 
         .floating-suggestions-wrapper {
@@ -3048,8 +3048,7 @@
 
         /* Copy button specific styles */
         .message .copy-btn {
-            background: linear-gradient(135deg, #1F7246
-, #EF4444);
+            background:  #1F7246;
             color: white;
             border: 1px solid #1F7246;
         }
@@ -3754,6 +3753,7 @@
             justify-content: flex-start;
             flex-direction: column;
             align-items: flex-start;
+            margin-bottom: 36px;
         }
 
         .message-bubble {

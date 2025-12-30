@@ -29,19 +29,16 @@ function ChatArea({ chatHistory, onSendMessage, onReceiveResponse, onNewChat, is
     await onSendMessage(message);
   };     
 
-  const handleSuggestionSelect = (suggestion) => {
-    // Prefill chat input with chosen suggestion and focus for quick editing
-    chatInputRef.current?.setValue(suggestion);
-  };
-
   const handlePromptSelect = (prompt) => {
     chatInputRef.current?.setValue(prompt);
     setShowPromptGallery(false);
   };
 
-  // Show floating suggestions only after at least one assistant response exists,
-  // mirroring the behavior in igl.html (chips appear under a generated answer).
+  // Show floating gallery button only after at least one assistant response exists,
+  // and hide it while generating a response (isSending).
+  // The button appears under the response, matching the behavior in igl.html.
   const hasAssistantResponse = messages.some((msg) => msg.role === 'assistant');
+  const shouldShowGalleryButton = hasAssistantResponse && !isSending;
 
   return (
     <div className="chat-area has-header" id="chat-area">
@@ -50,13 +47,12 @@ function ChatArea({ chatHistory, onSendMessage, onReceiveResponse, onNewChat, is
       <div className="chat-messages chat-container" id="chat-container">
         <ChatMessages messages={messages} isSending={isSending} />
 
-        {hasAssistantResponse && (
+        {shouldShowGalleryButton && (
           <div className="floating-suggestions-container inline-floating" data-floating="gallery-btn">
             <div className="floating-suggestions-wrapper">
               <ChatSuggestions
-                onSelectSuggestion={handleSuggestionSelect}
                 onOpenPromptGallery={() => setShowPromptGallery(true)}
-              />
+              /> 
             </div>
           </div>
         )}

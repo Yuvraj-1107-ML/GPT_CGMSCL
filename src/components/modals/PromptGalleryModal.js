@@ -71,7 +71,7 @@ function PromptGalleryModal({ onClose, onPromptSelect }) {
           ))}
         </div>
         
-        <div className="extended-cards-grid" style={{ marginTop: '24px' }}>
+        {/* <div className="extended-cards-grid" style={{ marginTop: '24px' }}>
           {extendedPromptCards.map((card) => (
             <PromptCard
               key={card.id}
@@ -80,7 +80,7 @@ function PromptGalleryModal({ onClose, onPromptSelect }) {
               onCardClick={handleCardClick}
             />
           ))}
-        </div>
+        </div> */}
       </div>
 
       {/* Card Prompts Modal - shown when a card is clicked */}

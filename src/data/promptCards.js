@@ -30,7 +30,6 @@ export const globalPromptCards = [
     prompts: [
       'Which items have supply < 50% of PO quantity?',
       'Which POs are delayed beyond delivery SLA?',
-      'Which high-priority items have pending inward at WH?',
       'Which POs have partial supply (<50%)?',
       'Which items have been awarded and which are pending award?',
       'For Item Oxytocin Injection IP , has PO been issued to the vendor?',
@@ -40,7 +39,6 @@ export const globalPromptCards = [
       'POs where partial supplies were made but balance overdue.',
       'Vendors who have defaulted in timely supply.',
       'Which POs are nearing expiry of delivery period?',
-      'PO-wise inward delays at WH.'
     ]
   },
   {
@@ -54,8 +52,6 @@ export const globalPromptCards = [
       'Which tenders are delayed and may impact supply?',
       'Which items in this tender received single-vendor bids?',
       'Vendor participation summary item-wise for this tender, tender no. 164',
-      'Items where bidders were disqualified during PQ or technical evaluation.',
-      'Which items have abnormally high quotes compared to previous RC?',
       'Which items have been awarded and which are pending award?',
       'For Item Oxytocin Injection IP, has PO been issued to the vendor?',
       'Which items have supply < 50% of PO quantity?'
@@ -71,23 +67,22 @@ export const globalPromptCards = [
       'When does the RC for Item X expire?',
       'Which RCs expire within 30/60/90 days?',
       'Items requiring immediate RC extension or fresh tendering.',
-      'Which RC vendors are under watch due to QC failures?',
       'Which items need transition from old RC to new tender?',
       'Which RC items have repeated supply delays?',
       'Items needing emergency procurement due to RC-Tender gap.'
     ]
   },
-  {
-    id: 'procurement-execution-main',
-    type: 'main',
-    icon: '✅',
-    title: 'Procurement Execution (PO, Supply, Vendor Performance)',
-    description: 'Track QC status, NSQ items, hold batches, and vendor performance',
-    prompts: [
-      'Item-wise QC hold batches blocking supply.',
-      'Vendors whose QC failures are delaying supplies for tender/RC items.'
-    ]
-  },
+  // {
+  //   id: 'procurement-execution-main',
+  //   type: 'main',
+  //   icon: '✅',
+  //   title: 'Procurement Execution (PO, Supply, Vendor Performance)',
+  //   description: 'Track QC status, NSQ items, hold batches, and vendor performance',
+  //   prompts: [
+  //     'Item-wise QC hold batches blocking supply.',
+  //     'Vendors whose QC failures are delaying supplies for tender/RC items.'
+  //   ]
+  // },
   {
     id: 'high-priority-exceptions-main',
     type: 'main',
