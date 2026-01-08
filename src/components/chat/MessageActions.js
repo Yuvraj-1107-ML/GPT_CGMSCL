@@ -11,9 +11,9 @@ import excelIcon from '../../assets/images/excel.png';
  */
 function MessageActions({ message, index, messages = [] }) {
   const [isDownloading, setIsDownloading] = useState(false);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [selectedRating, setSelectedRating] = useState(null);
-  const [activeFeedback, setActiveFeedback] = useState(null);
+  // const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  // const [selectedRating, setSelectedRating] = useState(null);
+  // const [activeFeedback, setActiveFeedback] = useState(null);
 
   /**
    * Get the query from the previous user message
@@ -77,7 +77,7 @@ function MessageActions({ message, index, messages = [] }) {
         window.URL.revokeObjectURL(url);
         
         // Track download for feedback
-        trackDownload('excel');
+        // trackDownload('excel');
         showNotification('Excel file downloaded successfully!', 'success');
       }
       // Priority 2: Generate Excel from data rows (from current API)
@@ -85,21 +85,21 @@ function MessageActions({ message, index, messages = [] }) {
         const filename = `CGMSCL_Query_Results_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
         // Pass columns if available
         await generateExcelFromData(message.dataRows, filename, message.dataColumns);
-        trackDownload('excel');
+        // trackDownload('excel');
         showNotification('Excel file downloaded successfully!', 'success');
       }
       // Priority 3: Generate Excel from suggestions (alternative data format)
       else if (message.suggestions && Array.isArray(message.suggestions) && message.suggestions.length > 0) {
         const filename = `CGMSCL_Query_Results_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
         await generateExcelFromData(message.suggestions, filename);
-        trackDownload('excel');
+        // trackDownload('excel');
         showNotification('Excel file downloaded successfully!', 'success');
       }
       // Priority 4: Generate Excel from response text (extract tables if present)
       else if (message.text) {
         const filename = `CGMSCL_Query_Results_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
         await generateExcelFromResponse(message.text, filename);
-        trackDownload('excel');
+        // trackDownload('excel');
         showNotification('Excel file downloaded successfully!', 'success');
       }
       else {
@@ -116,29 +116,29 @@ function MessageActions({ message, index, messages = [] }) {
   /**
    * Handle feedback button click
    */
-  const handleFeedback = (rating) => {
-    setSelectedRating(rating);
-    setActiveFeedback(rating);
-    setShowFeedbackModal(true);
-  };
+  // const handleFeedback = (rating) => {
+  //   setSelectedRating(rating);
+  //   setActiveFeedback(rating);
+  //   setShowFeedbackModal(true);
+  // };
 
   /**
    * Handle feedback modal close
-   * @param {string|null} submittedRating - The rating that was submitted, or null if cancelled
-   */
-  const handleCloseFeedbackModal = (submittedRating) => {
-    setShowFeedbackModal(false);
-    // If feedback was submitted, keep the active state; otherwise reset it
-    if (submittedRating) {
-      setActiveFeedback(submittedRating);
-    } else {
-      // Only reset if no feedback was previously submitted
-      // This allows users to change their feedback
-      if (!activeFeedback) {
-        setActiveFeedback(null);
-      }
-    }
-  };
+  //  * @param {string|null} submittedRating - The rating that was submitted, or null if cancelled
+  //  */
+  // const handleCloseFeedbackModal = (submittedRating) => {
+  //   setShowFeedbackModal(false);
+  //   // If feedback was submitted, keep the active state; otherwise reset it
+  //   if (submittedRating) {
+  //     setActiveFeedback(submittedRating);
+  //   } else {
+  //     // Only reset if no feedback was previously submitted
+  //     // This allows users to change their feedback
+  //     if (!activeFeedback) {
+  //       setActiveFeedback(null);
+  //     }
+  //   }
+  // };
 
   return (
     <>
