@@ -78,7 +78,7 @@ function App() {
     setChatHistory(prev => [...prev, userMessage]);
 
     // Start response timer for enhanced feedback tracking
-    startResponseTimer();
+    // startResponseTimer();
 
     // Call backend Lambda for assistant response
     try {

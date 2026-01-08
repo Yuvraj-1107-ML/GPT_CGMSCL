@@ -156,7 +156,7 @@ function SettingsDropdown() {
         <div className="settings-separator"></div>
         
         {/* Feedback */}
-        <div 
+        {/* <div 
           className="settings-item" 
           role="menuitem" 
           data-action="feedback" 
@@ -165,7 +165,7 @@ function SettingsDropdown() {
         >
           <i className="fas fa-comment-dots"></i>
           <span>Send Feedback</span>
-        </div>
+        </div> */}
         
         <div className="settings-separator"></div>
         
