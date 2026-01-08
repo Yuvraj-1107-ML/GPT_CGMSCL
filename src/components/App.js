@@ -4,7 +4,7 @@ import WelcomeScreen from './welcome/WelcomeScreen';
 import ChatArea from './chat/ChatArea';
 import AnalysisPanel from './common/AnalysisPanel';
 import VersionDisclaimer from './common/VersionDisclaimer';
-import { startResponseTimer } from '../utils/feedbackService';
+// import { startResponseTimer } from '../utils/feedbackService';
 
 /**
  * Main App Component
