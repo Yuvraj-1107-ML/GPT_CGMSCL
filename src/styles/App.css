@@ -133,6 +133,41 @@
             line-height: 1.4;
         }
 
+        /* Company Logo Mark Styles */
+        .company-logo-mark {
+            position: fixed;
+            bottom: 12px;
+            right: 12px;
+            z-index: 9999;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .company-logo-mark:hover {
+            opacity: 1;
+        }
+
+        .company-logo-mark img {
+            height: 40px;
+            width: auto;
+            max-width: 120px;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        }
+
+        @media (max-width: 768px) {
+            .company-logo-mark {
+                bottom: 8px;
+                right: 8px;
+            }
+
+            .company-logo-mark img {
+                height: 32px;
+                max-width: 100px;
+            }
+        }
+
 
 
         /* Main Content Area */

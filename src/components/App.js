@@ -4,6 +4,7 @@ import WelcomeScreen from './welcome/WelcomeScreen';
 import ChatArea from './chat/ChatArea';
 import AnalysisPanel from './common/AnalysisPanel';
 import VersionDisclaimer from './common/VersionDisclaimer';
+import CompanyLogoMark from './common/CompanyLogoMark';
 // import { startResponseTimer } from '../utils/feedbackService';
 
 /**
@@ -236,6 +237,7 @@ function App() {
       </div>
       
       <VersionDisclaimer />
+      <CompanyLogoMark />
     </div>
   );
 }
