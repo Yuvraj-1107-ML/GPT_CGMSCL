@@ -38,6 +38,12 @@ export const globalPromptCards = [
     prompts: [
       'Provide the overall tender status of drugs',
       'Tender status of Drugs in DPDMIS',
+      'CME or commissioner Medical Education',
+          'Tender Status of A Category ',
+          'Tender Status of B Category ',
+          'Tender Status of C Category ',
+          'List of Re-Tender drugs which need to be floated',
+          'List of fresh Tender Drugs which need to be floated',
       'Provide the overall tender status of drugs including RC Status',
       'Show items whose RC expires soon (<90 days)',
       'Give me all of the items which have valid rate contracts',
