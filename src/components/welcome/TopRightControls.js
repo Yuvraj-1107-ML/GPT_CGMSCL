@@ -1,6 +1,5 @@
 import React from 'react';
 import SettingsDropdown from '../settings/SettingsDropdown';
-import AnalysisToggle from './AnalysisToggle';
 
 /**
  * Top Right Controls Component
@@ -26,8 +25,7 @@ function TopRightControls({ onNewChat }) {
         </svg>
       </button>
 
-      {/* Analysis Toggle */}
-      <AnalysisToggle location="home" />
+      {/* Analysis Toggle - Hidden on welcome screen, shown only during response generation */}
 
       {/* Settings Dropdown */}
       <SettingsDropdown />

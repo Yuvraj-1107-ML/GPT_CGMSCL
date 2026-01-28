@@ -14,15 +14,34 @@ function ChatArea({ chatHistory, onSendMessage, onReceiveResponse, onNewChat, is
   const [showPromptGallery, setShowPromptGallery] = useState(false);
   const messagesEndRef = useRef(null);
   const chatInputRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const previousMessagesLengthRef = useRef(0);
 
   useEffect(() => {
     setMessages(chatHistory);
   }, [chatHistory]);
 
+  // Scroll to bottom when messages change or when sending status changes
   useEffect(() => {
-    // Scroll to bottom when messages change
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    // Only scroll to bottom when new messages are added or when response is being generated
+    const hasNewMessages = messages.length > previousMessagesLengthRef.current;
+    
+    if ((hasNewMessages || isSending) && chatContainerRef.current) {
+      // Use requestAnimationFrame to ensure DOM is updated before scrolling
+      requestAnimationFrame(() => {
+        if (chatContainerRef.current) {
+          // Scroll to bottom smoothly
+          chatContainerRef.current.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      });
+    }
+    
+    // Update previous length
+    previousMessagesLengthRef.current = messages.length;
+  }, [messages, isSending]);
 
   const handleSend = async (message) => {
     // Delegate sending to parent (App) so both WelcomeScreen and ChatInput share the same flow
@@ -42,9 +61,13 @@ function ChatArea({ chatHistory, onSendMessage, onReceiveResponse, onNewChat, is
 
   return (
     <div className="chat-area has-header" id="chat-area">
-      <ChatHeader onNewChat={onNewChat} />
+      <ChatHeader onNewChat={onNewChat} isSending={isSending} chatHistory={chatHistory} />
       
-      <div className="chat-messages chat-container" id="chat-container">
+      <div 
+        ref={chatContainerRef}
+        className="chat-messages chat-container" 
+        id="chat-container"
+      >
         <ChatMessages messages={messages} isSending={isSending} />
 
         {shouldShowGalleryButton && (

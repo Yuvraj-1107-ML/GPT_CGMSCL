@@ -5,6 +5,7 @@ import ChatArea from './chat/ChatArea';
 import AnalysisPanel from './common/AnalysisPanel';
 import VersionDisclaimer from './common/VersionDisclaimer';
 import CompanyLogoMark from './common/CompanyLogoMark';
+import ChatHistorySidebar from './common/ChatHistorySidebar';
 // import { startResponseTimer } from '../utils/feedbackService';
 
 /**
@@ -16,32 +17,88 @@ function App() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [showChat, setShowChat] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+  const [chatSessions, setChatSessions] = useState([]);
+  const [currentChatId, setCurrentChatId] = useState(null);
   const [isSending, setIsSending] = useState(false);
 
-  // Load chat history from localStorage on mount
+  // Generate unique ID for chat sessions
+  const generateChatId = () => {
+    return `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  };
+
+  // Load chat sessions from localStorage on mount
   useEffect(() => {
-    const savedHistory = localStorage.getItem('chatHistory');
-    if (savedHistory) {
+    const savedSessions = localStorage.getItem('chatSessions');
+    if (savedSessions) {
       try {
-        const parsed = JSON.parse(savedHistory);
-        setChatHistory(parsed);
-        // If there's history, show chat view
+        const parsed = JSON.parse(savedSessions);
+        setChatSessions(parsed);
+        // If there are sessions, load the most recent one
         if (parsed.length > 0) {
+          const mostRecent = parsed.sort((a, b) => {
+            const aTime = a.updatedAt || a.createdAt || 0;
+            const bTime = b.updatedAt || b.createdAt || 0;
+            return new Date(bTime) - new Date(aTime);
+          })[0];
+          setCurrentChatId(mostRecent.id);
+          setChatHistory(mostRecent.messages || []);
           setShowWelcome(false);
           setShowChat(true);
         }
       } catch (e) {
-        console.error('Error loading chat history:', e);
+        console.error('Error loading chat sessions:', e);
+      }
+    } else {
+      // Migrate old chatHistory format to new chatSessions format
+      const oldHistory = localStorage.getItem('chatHistory');
+      if (oldHistory) {
+        try {
+          const parsed = JSON.parse(oldHistory);
+          if (parsed.length > 0) {
+            const chatId = generateChatId();
+            const session = {
+              id: chatId,
+              messages: parsed,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            setChatSessions([session]);
+            setCurrentChatId(chatId);
+            setChatHistory(parsed);
+            setShowWelcome(false);
+            setShowChat(true);
+            localStorage.setItem('chatSessions', JSON.stringify([session]));
+            localStorage.removeItem('chatHistory');
+          }
+        } catch (e) {
+          console.error('Error migrating chat history:', e);
+        }
       }
     }
   }, []);
 
-  // Save chat history to localStorage whenever it changes
+  // Save chat sessions to localStorage whenever they change
   useEffect(() => {
-    if (chatHistory.length > 0) {
-      localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+    if (chatSessions.length > 0) {
+      localStorage.setItem('chatSessions', JSON.stringify(chatSessions));
     }
-  }, [chatHistory]);
+  }, [chatSessions]);
+
+  // Update current chat session when chatHistory changes
+  useEffect(() => {
+    if (currentChatId && chatHistory.length > 0) {
+      setChatSessions(prev => prev.map(session => {
+        if (session.id === currentChatId) {
+          return {
+            ...session,
+            messages: chatHistory,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return session;
+      }));
+    }
+  }, [chatHistory, currentChatId]);
 
   // Hide loading screen after component mounts
   useEffect(() => {
@@ -57,7 +114,38 @@ function App() {
     setShowWelcome(true);
     setShowChat(false);
     setChatHistory([]);
-    localStorage.removeItem('chatHistory');
+    setCurrentChatId(null);
+  };
+
+  // Handle selecting a chat from history
+  const handleSelectChat = (chatId) => {
+    const session = chatSessions.find(s => s.id === chatId);
+    if (session) {
+      setCurrentChatId(chatId);
+      setChatHistory(session.messages || []);
+      setShowWelcome(false);
+      setShowChat(true);
+    }
+  };
+
+  // Handle deleting a chat session
+  const handleDeleteChat = (chatId) => {
+    const updatedSessions = chatSessions.filter(s => s.id !== chatId);
+    setChatSessions(updatedSessions);
+
+    // If deleted chat was current, switch to welcome or another chat
+    if (chatId === currentChatId) {
+      if (updatedSessions.length > 0) {
+        const mostRecent = updatedSessions.sort((a, b) => {
+          const aTime = a.updatedAt || a.createdAt || 0;
+          const bTime = b.updatedAt || b.createdAt || 0;
+          return new Date(bTime) - new Date(aTime);
+        })[0];
+        handleSelectChat(mostRecent.id);
+      } else {
+        handleNewChat();
+      }
+    }
   };
 
   // Handle sending a message (switches to chat view)
@@ -69,6 +157,19 @@ function App() {
     setIsSending(true);
 
     const trimmed = message.trim();
+
+    // Create new chat session if needed
+    if (!currentChatId) {
+      const newChatId = generateChatId();
+      const newSession = {
+        id: newChatId,
+        messages: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setCurrentChatId(newChatId);
+      setChatSessions(prev => [...prev, newSession]);
+    }
 
     // Add user message to history immediately
     const userMessage = {
@@ -85,7 +186,7 @@ function App() {
     try {
       // Always use AWS backend as per requirements
       const CHAT_API_URL = process.env.REACT_APP_CHAT_API_URL;
-        
+
       console.log(`Sending request to AWS backend:`, CHAT_API_URL);
 
       const response = await fetch(CHAT_API_URL, {
@@ -102,33 +203,61 @@ function App() {
       const data = await response.json();
       console.log('API Response Data (Full):', JSON.stringify(data, null, 2));
       console.log('API Response Data (Object):', data);
-      
-      // Check multiple possible paths for data rows
-      // API structure: data.data.result.rows (new format) or data.data.rows (old format)
+
+      // Lambda backend response format: { query, sql, data, response, visualization }
+      // The 'data' field contains sql_result which can be:
+      // 1. List of dictionaries: [{col1: val1, col2: val2}, ...]
+      // 2. Dictionary with 'rows' key: {rows: [...], columns: [...]}
+      // 3. Dictionary with 'data' key: {data: [...], columns: [...]}
+      // 4. Dictionary with 'results' key: {results: [...]}
+
       let possibleRows = null;
-      if (Array.isArray(data.data?.result?.rows) && data.data.result.rows.length > 0) {
-        possibleRows = data.data.result.rows;
-      } else if (Array.isArray(data.data?.rows) && data.data.rows.length > 0) {
-        possibleRows = data.data.rows;
-      } else if (Array.isArray(data.data) && data.data.length > 0) {
-        possibleRows = data.data;
-      } else if (Array.isArray(data.rows) && data.rows.length > 0) {
-        possibleRows = data.rows;
-      }
-      
-      // Check multiple possible paths for columns
-      // API structure: data.data.result.columns (new format) or data.data.columns (old format)
       let possibleColumns = null;
-      if (Array.isArray(data.data?.result?.columns) && data.data.result.columns.length > 0) {
-        possibleColumns = data.data.result.columns;
-      } else if (Array.isArray(data.data?.columns) && data.data.columns.length > 0) {
-        possibleColumns = data.data.columns;
-      } else if (Array.isArray(data.data?.columnNames) && data.data.columnNames.length > 0) {
-        possibleColumns = data.data.columnNames;
-      } else if (Array.isArray(data.columns) && data.columns.length > 0) {
-        possibleColumns = data.columns;
+
+      // Handle Lambda response format (data.data is the sql_result)
+      if (data.data) {
+        // Case 1: data.data is a list of dictionaries (most common Lambda format)
+        if (Array.isArray(data.data) && data.data.length > 0) {
+          possibleRows = data.data;
+          // Extract column names from first row if it's an object
+          if (data.data[0] && typeof data.data[0] === 'object' && !Array.isArray(data.data[0])) {
+            possibleColumns = Object.keys(data.data[0]);
+          }
+        }
+        // Case 2: data.data is a dictionary with 'rows' or 'data' key
+        else if (typeof data.data === 'object' && !Array.isArray(data.data)) {
+          if (Array.isArray(data.data.rows) && data.data.rows.length > 0) {
+            possibleRows = data.data.rows;
+            possibleColumns = data.data.columns || data.data.columnNames;
+          } else if (Array.isArray(data.data.data) && data.data.data.length > 0) {
+            possibleRows = data.data.data;
+            possibleColumns = data.data.columns || data.data.columnNames;
+          } else if (Array.isArray(data.data.results) && data.data.results.length > 0) {
+            possibleRows = data.data.results;
+            possibleColumns = data.data.columns || data.data.columnNames;
+          }
+        }
       }
-      
+
+      // Fallback: Check other possible paths (for backward compatibility)
+      if (!possibleRows) {
+        if (Array.isArray(data.data?.result?.rows) && data.data.result.rows.length > 0) {
+          possibleRows = data.data.result.rows;
+          possibleColumns = data.data.result.columns;
+        } else if (Array.isArray(data.rows) && data.rows.length > 0) {
+          possibleRows = data.rows;
+          possibleColumns = data.columns;
+        }
+      }
+
+      // If still no columns found, try to extract from rows
+      if (possibleRows && !possibleColumns && Array.isArray(possibleRows) && possibleRows.length > 0) {
+        const firstRow = possibleRows[0];
+        if (firstRow && typeof firstRow === 'object' && !Array.isArray(firstRow)) {
+          possibleColumns = Object.keys(firstRow);
+        }
+      }
+
       // Check what data.data actually contains
       console.log('Data structure analysis:', {
         hasData: !!data.data,
@@ -148,13 +277,13 @@ function App() {
         foundColumns: !!possibleColumns,
         foundColumnsLength: possibleColumns?.length || 0
       });
-      
+
       console.log('Data structure for Chart:', {
         hasVisualization: !!data.visualization,
         visualization: data.visualization,
         chartType: data.visualization?.chartType
       });
-      
+
       // Check if visualization config has embedded data
       let visualizationDataRows = null;
       let visualizationDataColumns = null;
@@ -166,11 +295,11 @@ function App() {
           visualizationDataColumns = data.visualization.data.columns;
         }
       }
-      
+
       // Use visualization data if no other data found
       const finalDataRows = possibleRows || visualizationDataRows || data.data?.rows || (Array.isArray(data.data) ? data.data : null) || null;
       const finalDataColumns = possibleColumns || visualizationDataColumns || data.data?.columns || data.data?.columnNames || data.columns || null;
-      
+
       const assistantMessage = {
         role: 'assistant',
         text: data.response || 'No response received.',
@@ -210,7 +339,7 @@ function App() {
       suggestions: suggestions,
       timestamp: new Date().toISOString()
     };
-    
+
     setChatHistory(prev => [...prev, assistantMessage]);
     return assistantMessage;
   };
@@ -218,17 +347,28 @@ function App() {
   return (
     <div className="copilot-layout" id="chatContainer">
       {isLoading && <LoadingScreen />}
-      
+
       <div className="main-content" id="main-content">
         <AnalysisPanel />
-        
+
+        {/* Chat History Sidebar - only show when in chat view */}
+        {showChat && (
+          <ChatHistorySidebar
+            chatSessions={chatSessions}
+            currentChatId={currentChatId}
+            onSelectChat={handleSelectChat}
+            onNewChat={handleNewChat}
+            onDeleteChat={handleDeleteChat}
+          />
+        )}
+
         {showWelcome && (
-          <WelcomeScreen 
+          <WelcomeScreen
             onSendMessage={handleSendMessage}
             onNewChat={handleNewChat}
           />
         )}
-        
+
         {showChat && (
           <ChatArea
             chatHistory={chatHistory}
@@ -239,7 +379,7 @@ function App() {
           />
         )}
       </div>
-      
+
       <VersionDisclaimer />
       <CompanyLogoMark />
     </div>

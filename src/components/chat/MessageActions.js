@@ -64,7 +64,17 @@ function MessageActions({ message, index, messages = [] }) {
         });
         
         if (!response.ok) {
-          throw new Error(`Failed to download Excel file: ${response.statusText}`);
+          const errorText = await response.text();
+          console.error('Excel download error:', errorText);
+          throw new Error(`Failed to download Excel file: ${response.status} ${response.statusText}`);
+        }
+        
+        // Check if response is actually a blob (Excel file)
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) {
+          const text = await response.text();
+          console.error('Unexpected response type:', contentType, text.substring(0, 200));
+          throw new Error('Server returned invalid file format');
         }
         
         const blob = await response.blob();
@@ -77,8 +87,6 @@ function MessageActions({ message, index, messages = [] }) {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
         
-        // Track download for feedback
-        // trackDownload('excel');
         showNotification('Excel file downloaded successfully!', 'success');
       }
       // Priority 2: Generate Excel from data rows (from current API)
@@ -86,21 +94,18 @@ function MessageActions({ message, index, messages = [] }) {
         const filename = `CGMSCL_Query_Results_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
         // Pass columns if available
         await generateExcelFromData(message.dataRows, filename, message.dataColumns);
-        // trackDownload('excel');
         showNotification('Excel file downloaded successfully!', 'success');
       }
       // Priority 3: Generate Excel from suggestions (alternative data format)
       else if (message.suggestions && Array.isArray(message.suggestions) && message.suggestions.length > 0) {
         const filename = `CGMSCL_Query_Results_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
         await generateExcelFromData(message.suggestions, filename);
-        // trackDownload('excel');
         showNotification('Excel file downloaded successfully!', 'success');
       }
       // Priority 4: Generate Excel from response text (extract tables if present)
       else if (message.text) {
         const filename = `CGMSCL_Query_Results_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
         await generateExcelFromResponse(message.text, filename);
-        // trackDownload('excel');
         showNotification('Excel file downloaded successfully!', 'success');
       }
       else {
@@ -108,7 +113,8 @@ function MessageActions({ message, index, messages = [] }) {
       }
     } catch (error) {
       console.error('Error downloading Excel file:', error);
-      showNotification('Failed to download Excel file. Please try again.', 'error');
+      const errorMessage = error.message || 'Failed to download Excel file. Please try again.';
+      showNotification(errorMessage, 'error');
     } finally {
       setIsDownloading(false);
     }

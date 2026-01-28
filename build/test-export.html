@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Export Test - Tender Status</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1F7246;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #1F7246;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #1F7246;
+            color: white;
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .clickable-cell {
+            cursor: pointer;
+            background-color: #dbeafe;
+            font-weight: 600;
+            color: #1F7246;
+            transition: background-color 0.2s;
+        }
+        .clickable-cell:hover {
+            background-color: #bfdbfe;
+        }
+        .clickable-cell.exporting {
+            background-color: #bfdbfe;
+            opacity: 0.7;
+            cursor: wait;
+        }
+        button {
+            background-color: #1F7246;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #155a35;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .log-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+        }
+        .log-info {
+            color: #4ec9b0;
+        }
+        .log-error {
+            color: #f48771;
+        }
+        .log-success {
+            color: #89d185;
+        }
+        .log-warn {
+            color: #dcdcaa;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .test-controls {
+            margin: 20px 0;
+        }
+        input[type="text"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+            margin: 5px;
+        }
+        label {
+            font-weight: 600;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Excel Export Test - Tender Status</h1>
+        
+        <div class="test-section">
+            <h2>Test Configuration</h2>
+            <div style="background: #d1ecf1; padding: 15px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #0c5460;">
+                <strong>✅ Your API URL:</strong>
+                <div style="margin: 10px 0; padding: 10px; background: white; border-radius: 4px; font-family: monospace;">
+                    <code style="color: #0c5460; font-size: 14px;">https://qgpel27gok.execute-api.ap-south-1.amazonaws.com/dev/master</code>
+                </div>
+                <p style="margin: 5px 0; font-size: 12px; color: #666;">
+                    This URL will be auto-filled when you click "Auto-Detect" button.
+                </p>
+            </div>
+            <div class="test-controls">
+                <label for="apiUrl">API URL:</label>
+                <input type="text" id="apiUrl" placeholder="Enter API URL (e.g., https://xxx.execute-api.region.amazonaws.com/stage)" style="width: 400px;">
+                <button onclick="loadApiUrl()">Auto-Detect</button>
+                <button onclick="testConnection()">Test Connection</button>
+            </div>
+            <div id="connectionStatus"></div>
+            <div id="apiUrlHint" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Sample Tender Status Table</h2>
+            <p>Click on EDLs, Non-EDLs, or Total Items cells to test export functionality:</p>
+            <table id="testTable">
+                <thead>
+                    <tr>
+                        <th>RC Status</th>
+                        <th>Status Action</th>
+                        <th>EDLs</th>
+                        <th>Non-EDLs</th>
+                        <th>Total Items</th>
+                        <th>Total Value (₹ Lakhs)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>RC Valid</td>
+                        <td>RC Valid</td>
+                        <td class="clickable-cell" data-rc-status="RC Valid" data-status-action="RC Valid" data-cell-type="EDLs">306</td>
+                        <td class="clickable-cell" data-rc-status="RC Valid" data-status-action="RC Valid" data-cell-type="Non-EDLs">151</td>
+                        <td class="clickable-cell" data-rc-status="RC Valid" data-status-action="RC Valid" data-cell-type="Total Items">457</td>
+                        <td>11,015.08</td>
+                    </tr>
+                    <tr>
+                        <td>RC Not Valid</td>
+                        <td>Fresh Tender</td>
+                        <td class="clickable-cell" data-rc-status="RC Not Valid" data-status-action="Fresh Tender" data-cell-type="EDLs">723</td>
+                        <td class="clickable-cell" data-rc-status="RC Not Valid" data-status-action="Fresh Tender" data-cell-type="Non-EDLs">115</td>
+                        <td class="clickable-cell" data-rc-status="RC Not Valid" data-status-action="Fresh Tender" data-cell-type="Total Items">838</td>
+                        <td>1,379.27</td>
+                    </tr>
+                    <tr>
+                        <td>RC Not Valid</td>
+                        <td>Re-Tender</td>
+                        <td class="clickable-cell" data-rc-status="RC Not Valid" data-status-action="Re-Tender" data-cell-type="EDLs">466</td>
+                        <td class="clickable-cell" data-rc-status="RC Not Valid" data-status-action="Re-Tender" data-cell-type="Non-EDLs">422</td>
+                        <td class="clickable-cell" data-rc-status="RC Not Valid" data-status-action="Re-Tender" data-cell-type="Total Items">888</td>
+                        <td>4,905.28</td>
+                    </tr>
+                    <tr>
+                        <td>RC Not Valid</td>
+                        <td>Bid Found</td>
+                        <td class="clickable-cell" data-rc-status="RC Not Valid" data-status-action="Bid Found" data-cell-type="EDLs">160</td>
+                        <td class="clickable-cell" data-rc-status="RC Not Valid" data-status-action="Bid Found" data-cell-type="Non-EDLs">107</td>
+                        <td class="clickable-cell" data-rc-status="RC Not Valid" data-status-action="Bid Found" data-cell-type="Total Items">267</td>
+                        <td>7,179.32</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="test-section">
+            <h2>Manual SQL Test</h2>
+            <div class="test-controls">
+                <label for="rcStatus">RC Status:</label>
+                <input type="text" id="rcStatus" placeholder="e.g., RC Valid" value="RC Valid">
+                <label for="statusAction">Status Action:</label>
+                <input type="text" id="statusAction" placeholder="e.g., Fresh Tender" value="Fresh Tender">
+                <label for="cellType">Cell Type:</label>
+                <select id="cellType">
+                    <option value="EDLs">EDLs</option>
+                    <option value="Non-EDLs">Non-EDLs</option>
+                    <option value="Total Items">Total Items</option>
+                </select>
+                <button onclick="testManualExport()">Test Export</button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Test Logs</h2>
+            <button onclick="clearLogs()">Clear Logs</button>
+            <div id="logArea" class="log-area"></div>
+        </div>
+    </div>
+
+    <!-- Load xlsx library for Excel generation -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <script>
+        // Logging functions
+        function log(message, type = 'info') {
+            const logArea = document.getElementById('logArea');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logArea.appendChild(logEntry);
+            logArea.scrollTop = logArea.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        function clearLogs() {
+            document.getElementById('logArea').innerHTML = '';
+        }
+
+        // Default API URL from your configuration
+        const DEFAULT_API_URL = 'https://qgpel27gok.execute-api.ap-south-1.amazonaws.com/dev/master';
+
+        // Load API URL from various sources
+        function loadApiUrl() {
+            const hintDiv = document.getElementById('apiUrlHint');
+            let apiUrl = '';
+            let source = '';
+
+            // Try multiple sources
+            // 1. Check localStorage (user previously entered)
+            apiUrl = localStorage.getItem('testApiUrl');
+            if (apiUrl) {
+                source = 'localStorage (previously saved)';
+            }
+
+            // 2. Check if running in React app context (window object)
+            if (!apiUrl && window.REACT_APP_CHAT_API_URL) {
+                apiUrl = window.REACT_APP_CHAT_API_URL;
+                source = 'window.REACT_APP_CHAT_API_URL';
+            }
+
+            // 3. Check for other common env variable names
+            if (!apiUrl && window.REACT_APP_API_BASE_URL) {
+                apiUrl = window.REACT_APP_API_BASE_URL;
+                source = 'window.REACT_APP_API_BASE_URL';
+            }
+
+            // 4. Use default API URL from configuration
+            if (!apiUrl) {
+                apiUrl = DEFAULT_API_URL;
+                source = 'default configuration';
+            }
+
+            // Set the input field
+            document.getElementById('apiUrl').value = apiUrl;
+            
+            if (source) {
+                log(`API URL loaded from ${source}: ${apiUrl}`, 'success');
+                hintDiv.innerHTML = `✓ Loaded from ${source}`;
+            } else {
+                log(`API URL set: ${apiUrl}`, 'info');
+            }
+            
+            return apiUrl;
+        }
+
+        // Test API connection
+        async function testConnection() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            if (!apiUrl) {
+                alert('Please enter API URL first');
+                return;
+            }
+
+            log('Testing API connection...', 'info');
+            const statusDiv = document.getElementById('connectionStatus');
+            statusDiv.innerHTML = '<div class="status info">Testing connection...</div>';
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: 'test' })
+                });
+
+                if (response.ok) {
+                    statusDiv.innerHTML = '<div class="status success">✓ Connection successful!</div>';
+                    log('Connection test successful', 'success');
+                } else {
+                    statusDiv.innerHTML = `<div class="status error">✗ Connection failed: ${response.status}</div>`;
+                    log(`Connection test failed: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">✗ Connection error: ${error.message}</div>`;
+                log(`Connection error: ${error.message}`, 'error');
+            }
+        }
+
+        // Generate Excel from data
+        async function generateExcelFromData(data, filename, headers = null) {
+            if (!window.XLSX) {
+                throw new Error('XLSX library not loaded');
+            }
+
+            if (!data || !Array.isArray(data) || data.length === 0) {
+                throw new Error('No data provided or data is empty');
+            }
+
+            let worksheetData = [];
+            let columnHeaders = headers;
+
+            // Determine headers
+            if (columnHeaders) {
+                worksheetData.push(columnHeaders);
+            } else if (data[0] && typeof data[0] === 'object') {
+                columnHeaders = Object.keys(data[0]);
+                worksheetData.push(columnHeaders);
+            } else {
+                throw new Error('Cannot determine column headers');
+            }
+
+            // Add data rows
+            data.forEach(row => {
+                const values = columnHeaders.map(header => {
+                    const value = row[header];
+                    return value === null || value === undefined ? '' : value;
+                });
+                worksheetData.push(values);
+            });
+
+            // Create workbook
+            const wb = window.XLSX.utils.book_new();
+            const ws = window.XLSX.utils.aoa_to_sheet(worksheetData);
+            
+            // Set column widths
+            const colWidths = columnHeaders.map((header, colIndex) => {
+                let maxLength = String(header).length;
+                for (let rowIndex = 1; rowIndex < worksheetData.length; rowIndex++) {
+                    const cellValue = worksheetData[rowIndex][colIndex];
+                    if (cellValue !== null && cellValue !== undefined) {
+                        const cellLength = String(cellValue).length;
+                        if (cellLength > maxLength) {
+                            maxLength = cellLength;
+                        }
+                    }
+                }
+                return { wch: Math.min(Math.max(maxLength + 2, 10), 50) };
+            });
+            ws['!cols'] = colWidths;
+
+            window.XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+
+            // Generate and download
+            const excelBuffer = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([excelBuffer], { 
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+            });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            return true;
+        }
+
+        // Export function (same as production)
+        async function exportTenderStatusItems(rcStatus, statusAction, cellType) {
+            try {
+                log(`Starting export: RC=${rcStatus}, Action=${statusAction}, Type=${cellType}`, 'info');
+
+                // Build SQL query
+                const whereConditions = [];
+                whereConditions.push('MCID = 1');
+
+                if (rcStatus) {
+                    const escapedRcStatus = rcStatus.replace(/'/g, "''");
+                    whereConditions.push(`RCSTATUSITEM = '${escapedRcStatus}'`);
+                }
+
+                if (statusAction) {
+                    const escapedStatusAction = statusAction.replace(/'/g, "''");
+                    whereConditions.push(`ITEMSTATUS = '${escapedStatusAction}'`);
+                }
+
+                if (cellType === 'EDLs') {
+                    whereConditions.push(`ISEDL2025 = 'Yes'`);
+                } else if (cellType === 'Non-EDLs') {
+                    whereConditions.push(`(ISEDL2025 != 'Yes' OR ISEDL2025 IS NULL)`);
+                }
+
+                const sqlQuery = `SELECT MCATEGORY, ITEMID, ITEMCODE, ITEMNAME, STRENGTH, UNIT, ISEDL2021, ISEDL2025, ITEMSTATUS, DAYREMAININGITEM FROM MV_tender_dashboard WHERE ${whereConditions.join(' AND ')}`;
+                
+                log(`SQL Query: ${sqlQuery}`, 'info');
+
+                // Get API URL
+                const apiUrl = document.getElementById('apiUrl').value || loadApiUrl();
+                if (!apiUrl) {
+                    throw new Error('API URL not configured');
+                }
+
+                log(`Calling API: ${apiUrl}`, 'info');
+
+                // Call API
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ direct_sql: sqlQuery })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`API error: ${response.status} - ${errorText}`, 'error');
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const responseText = await response.text();
+                const data = JSON.parse(responseText);
+                log(`API Response received: ${JSON.stringify(data).substring(0, 200)}...`, 'info');
+
+                // Extract items - handle different response formats
+                let itemsData = null;
+                let columns = null;
+
+                if (data.error) {
+                    throw new Error(`SQL execution error: ${data.error}`);
+                }
+
+                // Check for data.data.result format (MCP response format - array of arrays)
+                if (data.data && data.data.result) {
+                    if (data.data.result.rows && Array.isArray(data.data.result.rows)) {
+                        itemsData = data.data.result.rows;
+                        columns = data.data.result.columns;
+                        log(`Found ${itemsData.length} items in data.data.result.rows (array format)`, 'success');
+                        log(`Columns: ${columns ? columns.join(', ') : 'N/A'}`, 'info');
+                    }
+                }
+                // Check for data.data format
+                else if (data.data) {
+                    if (Array.isArray(data.data)) {
+                        itemsData = data.data;
+                        log(`Found ${itemsData.length} items in data.data (array)`, 'success');
+                    } else if (data.data.rows && Array.isArray(data.data.rows)) {
+                        itemsData = data.data.rows;
+                        columns = data.data.columns;
+                        log(`Found ${itemsData.length} items in data.data.rows`, 'success');
+                        if (columns) log(`Columns: ${columns.join(', ')}`, 'info');
+                    } else if (data.data.data && Array.isArray(data.data.data)) {
+                        itemsData = data.data.data;
+                        log(`Found ${itemsData.length} items in data.data.data`, 'success');
+                    }
+                } else if (data.rows && Array.isArray(data.rows)) {
+                    itemsData = data.rows;
+                    columns = data.columns;
+                    log(`Found ${itemsData.length} items in data.rows`, 'success');
+                    if (columns) log(`Columns: ${columns.join(', ')}`, 'info');
+                } else if (Array.isArray(data)) {
+                    itemsData = data;
+                    log(`Found ${itemsData.length} items in data (array)`, 'success');
+                }
+
+                if (!itemsData || itemsData.length === 0) {
+                    log(`No items found. Full response: ${JSON.stringify(data, null, 2)}`, 'warn');
+                    throw new Error('No items found matching the criteria');
+                }
+
+                // Convert array of arrays to array of objects if needed
+                if (itemsData.length > 0 && Array.isArray(itemsData[0])) {
+                    log('Converting array of arrays to array of objects...', 'info');
+                    if (!columns) {
+                        // Use required columns if columns not provided
+                        columns = ['MCATEGORY', 'ITEMID', 'ITEMCODE', 'ITEMNAME', 'STRENGTH', 
+                                  'UNIT', 'ISEDL2021', 'ISEDL2025', 'ITEMSTATUS', 'DAYREMAININGITEM'];
+                        log(`Using default columns: ${columns.join(', ')}`, 'info');
+                    }
+                    itemsData = itemsData.map(row => {
+                        const obj = {};
+                        columns.forEach((col, index) => {
+                            obj[col] = row[index] !== null && row[index] !== undefined ? row[index] : '';
+                        });
+                        return obj;
+                    });
+                    log(`Converted ${itemsData.length} rows to objects`, 'success');
+                }
+
+                log(`Processing ${itemsData.length} items...`, 'info');
+                if (itemsData.length > 0) {
+                    log(`First item: ${JSON.stringify(itemsData[0])}`, 'info');
+                }
+
+                // Map to required columns
+                const requiredColumns = [
+                    'MCATEGORY', 'ITEMID', 'ITEMCODE', 'ITEMNAME', 'STRENGTH', 
+                    'UNIT', 'ISEDL2021', 'ISEDL2025', 'ITEMSTATUS', 'DAYREMAININGITEM'
+                ];
+
+                const items = itemsData.map(item => {
+                    const mappedItem = {};
+                    requiredColumns.forEach(col => {
+                        const value = item[col] || 
+                                     item[col.toUpperCase()] || 
+                                     item[col.toLowerCase()] ||
+                                     '';
+                        mappedItem[col] = value !== null && value !== undefined ? value : '';
+                    });
+                    return mappedItem;
+                });
+
+                log(`Mapped ${items.length} items to required columns`, 'success');
+
+                // Generate Excel
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const cellTypeSafe = cellType.replace(/\s+/g, '_');
+                const filename = `Tender_Status_${cellTypeSafe}_${timestamp}.xlsx`;
+                
+                await generateExcelFromData(items, filename, requiredColumns);
+                log(`✓ Excel file downloaded: ${filename}`, 'success');
+                
+                return true;
+            } catch (error) {
+                log(`✗ Export failed: ${error.message}`, 'error');
+                console.error('Export error:', error);
+                throw error;
+            }
+        }
+
+        // Setup click handlers for table cells
+        document.addEventListener('DOMContentLoaded', function() {
+            // Try to load API URL on page load, but don't force it
+            const autoUrl = loadApiUrl();
+            if (!autoUrl) {
+                log('⚠️ API URL not auto-detected. Please enter it manually above.', 'warn');
+            }
+
+            // Add click handlers to table cells
+            const clickableCells = document.querySelectorAll('.clickable-cell');
+            clickableCells.forEach(cell => {
+                cell.addEventListener('click', async function() {
+                    if (this.classList.contains('exporting')) return;
+
+                    const rcStatus = this.dataset.rcStatus;
+                    const statusAction = this.dataset.statusAction;
+                    const cellType = this.dataset.cellType;
+
+                    this.classList.add('exporting');
+                    
+                    try {
+                        await exportTenderStatusItems(rcStatus, statusAction, cellType);
+                        alert(`Excel file downloaded successfully!\n\nRC Status: ${rcStatus}\nStatus Action: ${statusAction}\nCell Type: ${cellType}`);
+                    } catch (error) {
+                        alert(`Export failed: ${error.message}\n\nCheck the logs below for details.`);
+                    } finally {
+                        this.classList.remove('exporting');
+                    }
+                });
+            });
+        });
+
+        // Manual test function
+        async function testManualExport() {
+            const rcStatus = document.getElementById('rcStatus').value;
+            const statusAction = document.getElementById('statusAction').value;
+            const cellType = document.getElementById('cellType').value;
+
+            try {
+                await exportTenderStatusItems(rcStatus, statusAction, cellType);
+                alert('Excel file downloaded successfully!');
+            } catch (error) {
+                alert(`Export failed: ${error.message}\n\nCheck the logs below for details.`);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -24,7 +24,7 @@ function MessageBubble({ message, index, messages = [] }) {
           {!isUser && message.sql_query && (
             <AnalysisDropdown sqlQuery={message.sql_query} />
           )}
-          
+
           <div className="message-text">
             {message.text}
           </div>
@@ -34,7 +34,7 @@ function MessageBubble({ message, index, messages = [] }) {
             <Chart visualization={message.visualization} data={chartData} />
           )}
         </div>
-        
+
         {!isUser && (
           <MessageActions message={message} index={index} messages={messages} />
         )}

@@ -6,7 +6,11 @@ import logoImage from '../../assets/images/motherson2.png';
  * Chat Header Component
  * Header for chat area with controls
  */
-function ChatHeader({ onNewChat }) {
+function ChatHeader({ onNewChat, isSending = false, chatHistory = [] }) {
+  // Show toggle when generating response OR when there are assistant messages
+  const hasAssistantResponse = chatHistory.some((msg) => msg.role === 'assistant');
+  const shouldShowToggle = isSending || hasAssistantResponse;
+
   return (
     <div className="chat-glassmorphism-header" id="chat-glassmorphism-header">
       <div className="chat-header-left">
@@ -30,7 +34,8 @@ function ChatHeader({ onNewChat }) {
           </svg>
         </button>
         
-        <AnalysisToggle location="chat" />
+        {/* Show Analysis Toggle during response generation and after response is generated */}
+        {shouldShowToggle && <AnalysisToggle location="chat" />}
       </div>
     </div>
   );

@@ -24,24 +24,45 @@ function loadXLSXLibrary() {
           resolve(window.XLSX);
         }
       }, 100);
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (!window.XLSX) {
+          reject(new Error('XLSX library loading timeout'));
+        }
+      }, 10000);
       return;
     }
 
-    // Load xlsx library from CDN
+    // Load xlsx library from CDN (use default if env var not set)
     const script = document.createElement('script');
-    const cdnUrl = process.env.REACT_APP_XLSX_CDN_URL;
+    const cdnUrl = process.env.REACT_APP_XLSX_CDN_URL || 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
     script.src = cdnUrl;
+    
     script.onload = () => {
-      if (window.XLSX) {
-        resolve(window.XLSX);
-      } else {
-        reject(new Error('XLSX library failed to load'));
-      }
+      // Wait a bit for the library to initialize
+      setTimeout(() => {
+        if (window.XLSX) {
+          resolve(window.XLSX);
+        } else {
+          reject(new Error('XLSX library failed to initialize after loading'));
+        }
+      }, 100);
     };
+    
     script.onerror = () => {
-      reject(new Error('Failed to load XLSX library from CDN'));
+      reject(new Error(`Failed to load XLSX library from CDN: ${cdnUrl}`));
     };
+    
     document.head.appendChild(script);
+    
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      if (!window.XLSX) {
+        reject(new Error('XLSX library loading timeout'));
+      }
+    }, 10000);
   });
 }
 

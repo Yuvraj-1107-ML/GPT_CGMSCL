@@ -57,9 +57,7 @@ function WelcomeScreen({ onSendMessage, onNewChat }) {
       <div className="welcome-header">
         <h1 className="welcome-title">How can I assist you today?</h1> 
         <p className="welcome-subtitle">
-          CGMSCL project focused on medical inventory, procurement, and warehouse management 
-          for medicines and medical supplies used in healthcare facility stock operations 
-          across Chhattisgarh government medical stores.
+        Chhattisgarh Medicine Supply Chain GPT to ensure timely, transparent, and uninterrupted availability of quality drugs and consumables across Chhattisgarh through intelligent tender tracking, efficient procurement, and real-time inventory management
         </p>
       </div>
 
