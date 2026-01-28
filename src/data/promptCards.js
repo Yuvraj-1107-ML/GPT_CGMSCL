@@ -36,6 +36,9 @@ export const globalPromptCards = [
     title: 'Tender / RC Tracking',
     description: 'Monitor tender progress and track rate contract status, expiry dates, and vendor participation.',
     prompts: [
+      'Provide the overall tender status of drugs',
+      'Tender status of Drugs in DPDMIS',
+      'Provide the overall tender status of drugs including RC Status',
       'Show items whose RC expires soon (<90 days)',
       'Give me all of the items which have valid rate contracts',
       'Average bids per tender?',
