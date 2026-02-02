@@ -131,7 +131,7 @@ function makeCellClickable(cell, cellType, rowData, headers, rcStatusIndex, tend
  * Export tender status items to Excel with specific columns
  * @param {string} rcStatus - RC Status value from the row
  * @param {string} statusAction - Status Action value from the row
- * @param {string} cellType - Type of cell clicked: 'EDLs', 'Non-EDLs', 'Total Items', 'A-Cat', 'B-Cat', or 'C-Cat'
+ * @param {string} cellType - Type of cell clicked: 'EDLs', 'Non-EDLs', 'Total Items', 'A-Cat', 'B-Cat', 'C-Cat', or any other cell type
  * @param {string} abcCategory - ABC category value ('A', 'B', or 'C') when clicking ABC category cells
  * @param {string} tenderProgress - Tender Progress/Remarks value from the row (for DPDMIS overall tender status)
  */
@@ -181,13 +181,13 @@ async function exportTenderStatusItems(rcStatus, statusAction, cellType, abcCate
       whereConditions.push(`ITEMSTATUS = '${escapedStatusAction}'`);
     }
     
-    // Add EDL filter based on cell type
-    if (cellType === 'EDLs') {
+    // Add EDL filter based on cell type (only for specific EDL-related cell types)
+    if (cellType === 'EDLs' || (cellType && cellType.toLowerCase().includes('edl') && !cellType.toLowerCase().includes('non'))) {
       whereConditions.push(`ISEDL2025 = 'Yes'`);
-    } else if (cellType === 'Non-EDLs') {
+    } else if (cellType === 'Non-EDLs' || (cellType && cellType.toLowerCase().includes('non') && cellType.toLowerCase().includes('edl'))) {
       whereConditions.push(`(ISEDL2025 != 'Yes' OR ISEDL2025 IS NULL)`);
     }
-    // For Total Items, no EDL filter is added
+    // For other cell types (Total Items, generic numeric cells, etc.), no EDL filter is added
     
     // Add ABC category filter if clicking on ABC category cells
     if (abcCategory && (cellType === 'A-Cat' || cellType === 'B-Cat' || cellType === 'C-Cat' || cellType === 'A-Category' || cellType === 'B-Category' || cellType === 'C-Category')) {
@@ -199,41 +199,61 @@ async function exportTenderStatusItems(rcStatus, statusAction, cellType, abcCate
       whereConditions.push(`ABCINDENTVALUE IN ('A', 'B', 'C')`);
     }
     
-    // Build complete SQL query with columns matching template format
-    // Column order: Sr.No, RC Status, Days to be RC Expired, EDL Type, Code, Item Name, Strength, Unit,
-    // Tender Status, Tender Code, Start Date, End Date, Cover A DT, Claim Objection End DT,
-    // Bids A, Bids B, Bids C, DHS AI QTY, CME AI QTY, Total AI QTY, Total Indent Value,
-    // ABC On Indent Value, Value Parameter, ABC Indent Value, Item Type, Therapeutic Class, RC Start DT, RC End DT, Floated Tender
+    // Build complete SQL query with all 50 columns from MV_tender_dashboard
+    // Column order as specified by user: RCSTATUSITEM, TENDERSTATUS, ITEMSTATUS, TENDERSCHEMECODE, ITEMID, INDENTVALUE, EDL, EDLVALUE, NONEDL, NONEDLVALUE, ABOVEBELOW, ITEMCODE, ITEMNAME, STRENGTH, UNIT, ITEMTYPENAME, GROUPNAME, EDLTYPE, RCSTARTITEM, RCENDDTITEM, LASTRCSCHEMECODE, DAYREMAININGITEM, LASTFLOATEDTENDERCODE, TENDERSTARTDT, SUBMISSIONLASTDT, COV_A_OPDATE, BIDFOUNDINCOVERA, CLAIMOBJSTARTDT, CLAIMOBJECTION_LAST, COV_B_OPDATE, PRICEBIDDATE, ABCACT, BIDFOUNDINCOVERB, BIDFOUNDINCOVERC, LEAD_TIME, RC_PRC_APPROXRATE, TOTALAI_QTY, DHSAI_QTY, CMEAI_QTY, VEDCAT, ACCEPTEDDT, YEARLY_ISSUE_QTY, YEARLY_NOC_QTY, TOTALSTOCK_INCPIPELINE, MIN_BATCH_SUPPLIED, READY_STOCK, IWHPIPE_STOCK, UQC_STOCK, PIPELINESTOCK, IPHSCTYPE, PRCENDDT, LASTRCEXTENEDUPTODT
     const sqlQuery = `SELECT 
-      ROW_NUMBER() OVER (ORDER BY RCSTATUSITEM, ITEMSTATUS, TENDERSTATUS, ITEMCODE) AS "Sr.No",
-      RCSTATUSITEM AS "RC Status",
-      DAYREMAININGITEM AS "Days to be RC Expired",
-      ISEDL2025 AS "EDL Type",
-      ITEMCODE AS "Code",
-      ITEMNAME AS "Item Name",
-      STRENGTH AS "Strength",
-      UNIT AS "Unit",
-      TENDERSTATUS AS "Tender Status",
-      SCHEMECODE AS "Tender Code",
-      TENDERSTARTDT AS "Start Date",
-      SUBMISSIONLASTDT AS "End Date",
-      COV_A_OPDATE AS "Cover A DT",
-      CLAIMOBJECTION_LAST AS "Claim Objection End DT",
-      BIDFOUNDINCOVERA AS "Bids A",
-      BIDFOUNDINCOVERB AS "Bids B",
-      BIDFOUNDINCOVERC AS "Bids C",
-      DHSAI_QTY AS "DHS AI QTY",
-      CMEAI_QTY AS "CME AI QTY",
-      TOTALAI_QTY AS "Total AI QTY",
-      ROUND(NVL(INDENTVALUEINRS, NVL(TOTALAI_QTY, 0) * NVL(RC_PRC_APPROXRATE, 0)) / 100000, 2) AS "Total Indent Value",
-      RC_PRC_APPROXRATE AS "ABC On Indent Value",
-      RC_PRC_APPROXRATE AS "Value Parameter",
-      ABCINDENTVALUE AS "ABC Indent Value",
-      ITEMTYPENAME AS "Item Type",
-      GROUPNAME AS "Therapeutic Class",
-      RCSTARTITEM AS "RC Start DT",
-      RCENDDTITEM AS "RC End DT",
-      LASTFLOATEDTENDERCODE AS "Floated Tender"
+      RCSTATUSITEM,
+      TENDERSTATUS,
+      ITEMSTATUS,
+      TENDERSCHEMECODE,
+      ITEMID,
+      NVL(INDENTVALUEINRS, NVL(TOTALAI_QTY, 0) * NVL(RC_PRC_APPROXRATE, 0)) AS INDENTVALUE,
+      CASE WHEN ISEDL2025 = 'Yes' THEN 'Yes' ELSE 'No' END AS EDL,
+      CASE WHEN ISEDL2025 = 'Yes' THEN NVL(INDENTVALUEINRS, NVL(TOTALAI_QTY, 0) * NVL(RC_PRC_APPROXRATE, 0)) ELSE 0 END AS EDLVALUE,
+      CASE WHEN NVL(ISEDL2025, 'No') != 'Yes' THEN 'Yes' ELSE 'No' END AS NONEDL,
+      CASE WHEN NVL(ISEDL2025, 'No') != 'Yes' THEN NVL(INDENTVALUEINRS, NVL(TOTALAI_QTY, 0) * NVL(RC_PRC_APPROXRATE, 0)) ELSE 0 END AS NONEDLVALUE,
+      CASE WHEN NVL(INDENTVALUEINRS, NVL(TOTALAI_QTY, 0) * NVL(RC_PRC_APPROXRATE, 0)) >= 100000 THEN 'Above 1L' ELSE 'Below 1L' END AS ABOVEBELOW,
+      ITEMCODE,
+      ITEMNAME,
+      STRENGTH,
+      UNIT,
+      ITEMTYPENAME,
+      GROUPNAME,
+      CASE WHEN ISEDL2025 = 'Yes' THEN 'EDL' ELSE 'Non EDL' END AS EDLTYPE,
+      RCSTARTITEM,
+      RCENDDTITEM,
+      LASTRCSCHEMECODE,
+      DAYREMAININGITEM,
+      LASTFLOATEDTENDERCODE,
+      TENDERSTARTDT,
+      SUBMISSIONLASTDT,
+      COV_A_OPDATE,
+      BIDFOUNDINCOVERA,
+      CLAIMOBJSTARTDT,
+      CLAIMOBJECTION_LAST,
+      COV_B_OPDATE,
+      PRICEBIDDATE,
+      ABCINDENTVALUE AS ABCACT,
+      BIDFOUNDINCOVERB,
+      BIDFOUNDINCOVERC,
+      LEAD_TIME,
+      RC_PRC_APPROXRATE,
+      TOTALAI_QTY,
+      DHSAI_QTY,
+      CMEAI_QTY,
+      VEDCATEGORY AS VEDCAT,
+      ACCEPTEDDT,
+      NULL AS YEARLY_ISSUE_QTY,
+      NULL AS YEARLY_NOC_QTY,
+      NULL AS TOTALSTOCK_INCPIPELINE,
+      NULL AS MIN_BATCH_SUPPLIED,
+      NULL AS READY_STOCK,
+      NULL AS IWHPIPE_STOCK,
+      NULL AS UQC_STOCK,
+      NULL AS PIPELINESTOCK,
+      NULL AS IPHSCTYPE,
+      PRCENDDT,
+      LASTRCEXTENEDUPTODT
     FROM MV_tender_dashboard WHERE ${whereConditions.join(' AND ')} ORDER BY RCSTATUSITEM, ITEMSTATUS, TENDERSTATUS, ITEMCODE`;
     
     console.log('=== Excel Export - Row-wise Filters ===');
@@ -383,12 +403,14 @@ async function exportTenderStatusItems(rcStatus, statusAction, cellType, abcCate
     if (itemsData.length > 0 && Array.isArray(itemsData[0])) {
       console.log('Converting array of arrays to array of objects...');
       if (!columns) {
-        // Use required columns matching template format
+        // Use required columns matching the 50 columns from MV_tender_dashboard
         columns = [
-          'Sr.No', 'RC Status', 'Days to be RC Expired', 'EDL Type', 'Code', 'Item Name', 'Strength', 'Unit',
-          'Tender Status', 'Tender Code', 'Start Date', 'End Date', 'Cover A DT', 'Claim Objection End DT',
-          'Bids A', 'Bids B', 'Bids C', 'DHS AI QTY', 'CME AI QTY', 'Total AI QTY', 'Total Indent Value',
-          'ABC On Indent Value', 'Value Parameter', 'ABC Indent Value', 'Item Type', 'Therapeutic Class', 'RC Start DT', 'RC End DT', 'Floated Tender'
+          'RCSTATUSITEM', 'TENDERSTATUS', 'ITEMSTATUS', 'TENDERSCHEMECODE', 'ITEMID', 'INDENTVALUE', 'EDL', 'EDLVALUE', 'NONEDL', 'NONEDLVALUE',
+          'ABOVEBELOW', 'ITEMCODE', 'ITEMNAME', 'STRENGTH', 'UNIT', 'ITEMTYPENAME', 'GROUPNAME', 'EDLTYPE', 'RCSTARTITEM', 'RCENDDTITEM',
+          'LASTRCSCHEMECODE', 'DAYREMAININGITEM', 'LASTFLOATEDTENDERCODE', 'TENDERSTARTDT', 'SUBMISSIONLASTDT', 'COV_A_OPDATE', 'BIDFOUNDINCOVERA',
+          'CLAIMOBJSTARTDT', 'CLAIMOBJECTION_LAST', 'COV_B_OPDATE', 'PRICEBIDDATE', 'ABCACT', 'BIDFOUNDINCOVERB', 'BIDFOUNDINCOVERC', 'LEAD_TIME',
+          'RC_PRC_APPROXRATE', 'TOTALAI_QTY', 'DHSAI_QTY', 'CMEAI_QTY', 'VEDCAT', 'ACCEPTEDDT', 'YEARLY_ISSUE_QTY', 'YEARLY_NOC_QTY',
+          'TOTALSTOCK_INCPIPELINE', 'MIN_BATCH_SUPPLIED', 'READY_STOCK', 'IWHPIPE_STOCK', 'UQC_STOCK', 'PIPELINESTOCK', 'IPHSCTYPE', 'PRCENDDT', 'LASTRCEXTENEDUPTODT'
         ];
         console.log('Using default columns:', columns);
       }
@@ -411,12 +433,14 @@ async function exportTenderStatusItems(rcStatus, statusAction, cellType, abcCate
       console.log('First item keys:', Object.keys(itemsData[0]));
     }
     
-    // Required columns in exact order matching template format
+    // Required columns in exact order matching the 50 columns from MV_tender_dashboard
     const requiredColumns = [
-      'Sr.No', 'RC Status', 'Days to be RC Expired', 'EDL Type', 'Code', 'Item Name', 'Strength', 'Unit',
-      'Tender Status', 'Tender Code', 'Start Date', 'End Date', 'Cover A DT', 'Claim Objection End DT',
-      'Bids A', 'Bids B', 'Bids C', 'DHS AI QTY', 'CME AI QTY', 'Total AI QTY', 'Total Indent Value',
-      'ABC On Indent Value', 'Value Parameter', 'ABC Indent Value', 'Item Type', 'Therapeutic Class', 'RC Start DT', 'RC End DT', 'Floated Tender'
+      'RCSTATUSITEM', 'TENDERSTATUS', 'ITEMSTATUS', 'TENDERSCHEMECODE', 'ITEMID', 'INDENTVALUE', 'EDL', 'EDLVALUE', 'NONEDL', 'NONEDLVALUE',
+      'ABOVEBELOW', 'ITEMCODE', 'ITEMNAME', 'STRENGTH', 'UNIT', 'ITEMTYPENAME', 'GROUPNAME', 'EDLTYPE', 'RCSTARTITEM', 'RCENDDTITEM',
+      'LASTRCSCHEMECODE', 'DAYREMAININGITEM', 'LASTFLOATEDTENDERCODE', 'TENDERSTARTDT', 'SUBMISSIONLASTDT', 'COV_A_OPDATE', 'BIDFOUNDINCOVERA',
+      'CLAIMOBJSTARTDT', 'CLAIMOBJECTION_LAST', 'COV_B_OPDATE', 'PRICEBIDDATE', 'ABCACT', 'BIDFOUNDINCOVERB', 'BIDFOUNDINCOVERC', 'LEAD_TIME',
+      'RC_PRC_APPROXRATE', 'TOTALAI_QTY', 'DHSAI_QTY', 'CMEAI_QTY', 'VEDCAT', 'ACCEPTEDDT', 'YEARLY_ISSUE_QTY', 'YEARLY_NOC_QTY',
+      'TOTALSTOCK_INCPIPELINE', 'MIN_BATCH_SUPPLIED', 'READY_STOCK', 'IWHPIPE_STOCK', 'UQC_STOCK', 'PIPELINESTOCK', 'IPHSCTYPE', 'PRCENDDT', 'LASTRCEXTENEDUPTODT'
     ];
     
     // Map items to required columns (data should already be in correct format from SQL with aliases)
@@ -617,38 +641,95 @@ export function useMarkdownRenderer(containerRef, messages) {
             headers: headers
           });
           
-          // Make EDLs cell clickable - pass direct values including tenderProgress
-          if (edlsIndex >= 0 && cells[edlsIndex]) {
+          // Make ALL numeric cells clickable (not just specific ones)
+          // Skip filter columns (RC Status, Tender Progress, Status Action) and header cells
+          cells.forEach((cell, cellIdx) => {
+            // Skip if this is a filter column (we don't want to make filter columns clickable)
+            if (cellIdx === rcStatusIndex || cellIdx === tenderProgressIndex || cellIdx === statusActionIndex) {
+              return;
+            }
+            
+            // Skip if already has click handler
+            if (cell.dataset.hasClickHandler === 'true') {
+              return;
+            }
+            
+            // Get cell value and check if it's numeric
+            const cellText = cell.textContent.trim();
+            const cellHeader = headers[cellIdx] || '';
+            
+            // Skip empty cells, "GRAND TOTAL" text, and non-numeric cells
+            if (!cellText || cellText.toUpperCase().includes('GRAND TOTAL') || cellText.toUpperCase().includes('TOTAL')) {
+              // Allow "Total Items" and similar aggregations to be clickable
+              if (!cellText.match(/^\d+$/) && !cellText.match(/^\d+\.\d+$/) && !cellHeader.toLowerCase().includes('total')) {
+                return;
+              }
+            }
+            
+            // Check if cell contains a number (integer or decimal)
+            const isNumeric = /^\d+$/.test(cellText) || /^\d+\.\d+$/.test(cellText) || /^\d+,\d+$/.test(cellText);
+            
+            // Also make cells clickable if they're in known aggregatable columns (EDLs, Non-EDLs, Total Items, ABC categories, etc.)
+            const isAggregatableColumn = 
+              (cellIdx === edlsIndex || cellIdx === nonEdlsIndex || cellIdx === totalItemsIndex) ||
+              (cellIdx === aCatIndex || cellIdx === bCatIndex || cellIdx === cCatIndex || cellIdx === totalAbcIndex) ||
+              (cellHeader.toLowerCase().includes('edl') || cellHeader.toLowerCase().includes('total')) ||
+              (cellHeader.toLowerCase().includes('category') || cellHeader.toLowerCase().includes('cat')) ||
+              (cellHeader.toLowerCase().includes('value') || cellHeader.toLowerCase().includes('items')) ||
+              (cellHeader.toLowerCase().includes('nositems') || cellHeader.toLowerCase().includes('indentvalue'));
+            
+            if (isNumeric || isAggregatableColumn) {
+              // Determine cell type from header or content
+              let cellType = 'Items';
+              if (cellIdx === edlsIndex || (cellHeader.toLowerCase().includes('edl') && !cellHeader.toLowerCase().includes('non'))) {
+                cellType = 'EDLs';
+              } else if (cellIdx === nonEdlsIndex || (cellHeader.toLowerCase().includes('non') && cellHeader.toLowerCase().includes('edl'))) {
+                cellType = 'Non-EDLs';
+              } else if (cellIdx === totalItemsIndex || cellHeader.toLowerCase().includes('total items')) {
+                cellType = 'Total Items';
+              } else if (cellIdx === aCatIndex || (cellHeader.toLowerCase().includes('a') && (cellHeader.toLowerCase().includes('cat') || cellHeader.toLowerCase().includes('category')))) {
+                cellType = 'A-Cat';
+              } else if (cellIdx === bCatIndex || (cellHeader.toLowerCase().includes('b') && (cellHeader.toLowerCase().includes('cat') || cellHeader.toLowerCase().includes('category')))) {
+                cellType = 'B-Cat';
+              } else if (cellIdx === cCatIndex || (cellHeader.toLowerCase().includes('c') && (cellHeader.toLowerCase().includes('cat') || cellHeader.toLowerCase().includes('category')))) {
+                cellType = 'C-Cat';
+              } else if (cellIdx === totalAbcIndex || cellHeader.toLowerCase().includes('total (a+b+c)')) {
+                cellType = 'Total (A+B+C)';
+              } else {
+                // Generic cell type based on header
+                cellType = cellHeader || 'Items';
+              }
+              
+              makeCellClickable(cell, cellType, rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
+            }
+          });
+          
+          // Keep specific handlers for known columns (for backward compatibility)
+          if (edlsIndex >= 0 && cells[edlsIndex] && cells[edlsIndex].dataset.hasClickHandler !== 'true') {
             makeCellClickable(cells[edlsIndex], 'EDLs', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
           }
           
-          // Make Non-EDLs cell clickable
-          if (nonEdlsIndex >= 0 && cells[nonEdlsIndex]) {
+          if (nonEdlsIndex >= 0 && cells[nonEdlsIndex] && cells[nonEdlsIndex].dataset.hasClickHandler !== 'true') {
             makeCellClickable(cells[nonEdlsIndex], 'Non-EDLs', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
           }
           
-          // Make Total Items cell clickable
-          if (totalItemsIndex >= 0 && cells[totalItemsIndex]) {
+          if (totalItemsIndex >= 0 && cells[totalItemsIndex] && cells[totalItemsIndex].dataset.hasClickHandler !== 'true') {
             makeCellClickable(cells[totalItemsIndex], 'Total Items', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
           }
           
-          // Make A-Cat cell clickable
-          if (aCatIndex >= 0 && cells[aCatIndex]) {
+          if (aCatIndex >= 0 && cells[aCatIndex] && cells[aCatIndex].dataset.hasClickHandler !== 'true') {
             makeCellClickable(cells[aCatIndex], 'A-Cat', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
           }
           
-          // Make B-Cat cell clickable
-          if (bCatIndex >= 0 && cells[bCatIndex]) {
+          if (bCatIndex >= 0 && cells[bCatIndex] && cells[bCatIndex].dataset.hasClickHandler !== 'true') {
             makeCellClickable(cells[bCatIndex], 'B-Cat', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
           }
           
-          // Make C-Cat cell clickable
-          if (cCatIndex >= 0 && cells[cCatIndex]) {
+          if (cCatIndex >= 0 && cells[cCatIndex] && cells[cCatIndex].dataset.hasClickHandler !== 'true') {
             makeCellClickable(cells[cCatIndex], 'C-Cat', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
           }
           
-          // Make Total (A+B+C) cell clickable (for ABC category table)
-          if (totalAbcIndex >= 0 && cells[totalAbcIndex]) {
+          if (totalAbcIndex >= 0 && cells[totalAbcIndex] && cells[totalAbcIndex].dataset.hasClickHandler !== 'true') {
             makeCellClickable(cells[totalAbcIndex], 'Total (A+B+C)', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
           }
         });
