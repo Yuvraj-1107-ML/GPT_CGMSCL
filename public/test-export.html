@@ -441,9 +441,43 @@
                     whereConditions.push(`(ISEDL2025 != 'Yes' OR ISEDL2025 IS NULL)`);
                 }
 
-                const sqlQuery = `SELECT MCATEGORY, ITEMID, ITEMCODE, ITEMNAME, STRENGTH, UNIT, ISEDL2021, ISEDL2025, ITEMSTATUS, DAYREMAININGITEM FROM MV_tender_dashboard WHERE ${whereConditions.join(' AND ')}`;
+                // Build SQL query with columns matching Tender_Items.xls format
+                const sqlQuery = `SELECT 
+                  RCSTATUSITEM AS "RC Status",
+                  DAYREMAININGITEM AS "Days to be RC Expired",
+                  ISEDL2025 AS "EDL Type",
+                  ITEMCODE AS "Code",
+                  ITEMNAME AS "Item Name",
+                  STRENGTH AS "Strength",
+                  UNIT AS "Unit",
+                  TENDERSTATUS AS "Tender Status",
+                  SCHEMECODE AS "Tender Code",
+                  TENDERSTARTDT AS "Start Date",
+                  SUBMISSIONLASTDT AS "End Date",
+                  COV_A_OPDATE AS "Cover A DT",
+                  CLAIMOBJECTION_LAST AS "Claim Objection End DT",
+                  BIDFOUNDINCOVERA AS "Bids A",
+                  BIDFOUNDINCOVERB AS "Bids B",
+                  BIDFOUNDINCOVERC AS "Bids C",
+                  DHSAI_QTY AS "DHS AI QTY",
+                  CMEAI_QTY AS "CME AI QTY",
+                  TOTALAI_QTY AS "Total AI QTY",
+                  ROUND(NVL(TOTALAI_QTY, 0) * NVL(RC_PRC_APPROXRATE, 0) / 100000, 2) AS "Total Indent Value",
+                  RC_PRC_APPROXRATE AS "ABC On Indent Value",
+                  RC_PRC_APPROXRATE AS "Value Parameter",
+                  GROUPNAME AS "The Therapeutic Type Class",
+                  RCSTARTITEM AS "RC Start DT",
+                  RCENDDTITEM AS "RC End DT",
+                  LASTFLOATEDTENDERCODE AS "Last Flow"
+                FROM MV_tender_dashboard WHERE ${whereConditions.join(' AND ')}`;
                 
+                log(`=== Excel Export - Row-wise Filters ===`, 'info');
+                log(`RC Status filter: ${rcStatus || 'None (all RC statuses)'}`, 'info');
+                log(`Status Action filter: ${statusAction || 'None (all statuses)'}`, 'info');
+                log(`Cell Type filter: ${cellType}`, 'info');
+                log(`WHERE conditions: ${whereConditions.join(' AND ')}`, 'info');
                 log(`SQL Query: ${sqlQuery}`, 'info');
+                log(`========================================`, 'info');
 
                 // Get API URL
                 const apiUrl = document.getElementById('apiUrl').value || loadApiUrl();
@@ -520,9 +554,13 @@
                 if (itemsData.length > 0 && Array.isArray(itemsData[0])) {
                     log('Converting array of arrays to array of objects...', 'info');
                     if (!columns) {
-                        // Use required columns if columns not provided
-                        columns = ['MCATEGORY', 'ITEMID', 'ITEMCODE', 'ITEMNAME', 'STRENGTH', 
-                                  'UNIT', 'ISEDL2021', 'ISEDL2025', 'ITEMSTATUS', 'DAYREMAININGITEM'];
+                        // Use required columns matching Tender_Items.xls format
+                        columns = [
+                            'RC Status', 'Days to be RC Expired', 'EDL Type', 'Code', 'Item Name', 'Strength', 'Unit',
+                            'Tender Status', 'Tender Code', 'Start Date', 'End Date', 'Cover A DT', 'Claim Objection End DT',
+                            'Bids A', 'Bids B', 'Bids C', 'DHS AI QTY', 'CME AI QTY', 'Total AI QTY', 'Total Indent Value',
+                            'ABC On Indent Value', 'Value Parameter', 'The Therapeutic Type Class', 'RC Start DT', 'RC End DT', 'Last Flow'
+                        ];
                         log(`Using default columns: ${columns.join(', ')}`, 'info');
                     }
                     itemsData = itemsData.map(row => {
@@ -540,10 +578,12 @@
                     log(`First item: ${JSON.stringify(itemsData[0])}`, 'info');
                 }
 
-                // Map to required columns
+                // Map to required columns matching Tender_Items.xls format
                 const requiredColumns = [
-                    'MCATEGORY', 'ITEMID', 'ITEMCODE', 'ITEMNAME', 'STRENGTH', 
-                    'UNIT', 'ISEDL2021', 'ISEDL2025', 'ITEMSTATUS', 'DAYREMAININGITEM'
+                    'RC Status', 'Days to be RC Expired', 'EDL Type', 'Code', 'Item Name', 'Strength', 'Unit',
+                    'Tender Status', 'Tender Code', 'Start Date', 'End Date', 'Cover A DT', 'Claim Objection End DT',
+                    'Bids A', 'Bids B', 'Bids C', 'DHS AI QTY', 'CME AI QTY', 'Total AI QTY', 'Total Indent Value',
+                    'ABC On Indent Value', 'Value Parameter', 'The Therapeutic Type Class', 'RC Start DT', 'RC End DT', 'Last Flow'
                 ];
 
                 const items = itemsData.map(item => {

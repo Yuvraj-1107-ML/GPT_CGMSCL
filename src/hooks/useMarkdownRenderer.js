@@ -1,11 +1,11 @@
 import { useEffect, useCallback } from 'react';
-import { generateExcelFromData } from '../utils/excelGenerator';
+import { generateExcelFromTemplate } from '../utils/excelGenerator';
 import { showNotification } from '../utils/notifications';
 
 /**
  * Make a table cell clickable for Excel export
  */
-function makeCellClickable(cell, cellType, rowData, headers, rcStatusIndex, statusActionIndex) {
+function makeCellClickable(cell, cellType, rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue = null, tenderProgressValue = null, statusActionValue = null) {
   // Skip if already has click handler
   if (cell.dataset.hasClickHandler === 'true') return;
   
@@ -39,14 +39,77 @@ function makeCellClickable(cell, cellType, rowData, headers, rcStatusIndex, stat
     cell.style.opacity = '0.8';
     
     try {
-      // Get filter values from row
-      const rcStatus = rcStatusIndex >= 0 ? rowData[headers[rcStatusIndex]] : null;
-      const statusAction = statusActionIndex >= 0 ? rowData[headers[statusActionIndex]] : null;
+      // Use direct values passed as parameters (most reliable)
+      // Fallback to rowData lookup if direct values not provided
+      let rcStatus = rcStatusValue || rowData._rcStatus || null;
+      let tenderProgress = tenderProgressValue || rowData._tenderProgress || null;
+      let statusAction = statusActionValue || rowData._statusAction || null;
       
-      showNotification(`Fetching ${cellType} items...`, 'info');
+      // If still not found, try extracting from rowData using header names
+      if (!rcStatus && rcStatusIndex >= 0 && headers[rcStatusIndex]) {
+        const rcStatusHeader = headers[rcStatusIndex].trim();
+        rcStatus = rowData[rcStatusHeader] || rowData[headers[rcStatusIndex]];
+      }
       
-      // Export items with specific columns based on cell type
-      await exportTenderStatusItems(rcStatus, statusAction, cellType);
+      if (!tenderProgress && tenderProgressIndex >= 0 && headers[tenderProgressIndex]) {
+        const tenderProgressHeader = headers[tenderProgressIndex].trim();
+        tenderProgress = rowData[tenderProgressHeader] || rowData[headers[tenderProgressIndex]];
+      }
+      
+      if (!statusAction && statusActionIndex >= 0 && headers[statusActionIndex]) {
+        const statusActionHeader = headers[statusActionIndex].trim();
+        statusAction = rowData[statusActionHeader] || rowData[headers[statusActionIndex]];
+      }
+      
+      // Final fallback: search rowData keys
+      if (!rcStatus) {
+        const rcStatusKey = Object.keys(rowData).find(key => 
+          (key.includes('RC Status') || key.includes('RC_Status')) && !key.startsWith('_')
+        );
+        if (rcStatusKey) rcStatus = rowData[rcStatusKey];
+      }
+      
+      if (!tenderProgress) {
+        const tenderProgressKey = Object.keys(rowData).find(key => 
+          ((key.includes('Tender Progress') || key.includes('Tender_Progress') || 
+           (key.includes('Progress') && key.includes('Remarks'))) && !key.startsWith('_'))
+        );
+        if (tenderProgressKey) tenderProgress = rowData[tenderProgressKey];
+      }
+      
+      if (!statusAction) {
+        const statusActionKey = Object.keys(rowData).find(key => 
+          (key.includes('Status Action') || key.includes('Status_Action') || 
+           key.includes('Status/Action')) && !key.startsWith('_')
+        );
+        if (statusActionKey) statusAction = rowData[statusActionKey];
+      }
+      
+      console.log('Row-wise filters for export:', { 
+        rcStatus, 
+        tenderProgress,
+        statusAction, 
+        cellType,
+        rcStatusValue,
+        tenderProgressValue,
+        statusActionValue,
+        rowDataKeys: Object.keys(rowData).filter(k => !k.startsWith('_'))
+      });
+      
+      // Determine ABC category if clicking on ABC category cells
+      let abcCategory = null;
+      if (cellType === 'A-Cat' || cellType === 'A-Category') {
+        abcCategory = 'A';
+      } else if (cellType === 'B-Cat' || cellType === 'B-Category') {
+        abcCategory = 'B';
+      } else if (cellType === 'C-Cat' || cellType === 'C-Category') {
+        abcCategory = 'C';
+      }
+      
+      showNotification(`Fetching ${cellType} items${rcStatus ? ` (RC: ${rcStatus})` : ''}${tenderProgress ? ` (Progress: ${tenderProgress})` : ''}${statusAction ? ` (Status: ${statusAction})` : ''}${abcCategory ? ` (ABC: ${abcCategory})` : ''}...`, 'info');
+      
+      // Export items with specific columns based on cell type and row conditions
+      await exportTenderStatusItems(rcStatus, statusAction, cellType, abcCategory, tenderProgress);
       
       showNotification(`Excel file downloaded successfully!`, 'success');
     } catch (error) {
@@ -68,9 +131,11 @@ function makeCellClickable(cell, cellType, rowData, headers, rcStatusIndex, stat
  * Export tender status items to Excel with specific columns
  * @param {string} rcStatus - RC Status value from the row
  * @param {string} statusAction - Status Action value from the row
- * @param {string} cellType - Type of cell clicked: 'EDLs', 'Non-EDLs', or 'Total Items'
+ * @param {string} cellType - Type of cell clicked: 'EDLs', 'Non-EDLs', 'Total Items', 'A-Cat', 'B-Cat', or 'C-Cat'
+ * @param {string} abcCategory - ABC category value ('A', 'B', or 'C') when clicking ABC category cells
+ * @param {string} tenderProgress - Tender Progress/Remarks value from the row (for DPDMIS overall tender status)
  */
-async function exportTenderStatusItems(rcStatus, statusAction, cellType) {
+async function exportTenderStatusItems(rcStatus, statusAction, cellType, abcCategory = null, tenderProgress = null) {
   try {
     // Build SQL query directly
     const whereConditions = [];
@@ -78,11 +143,35 @@ async function exportTenderStatusItems(rcStatus, statusAction, cellType) {
     // Always filter for drugs (MCID = 1)
     whereConditions.push('MCID = 1');
     
+    // Always filter for items with quantity > 0
+    whereConditions.push('NVL(TOTALAI_QTY, 0) > 0');
+    
     // Add RC status filter
     if (rcStatus) {
       // Escape single quotes in rcStatus
       const escapedRcStatus = rcStatus.replace(/'/g, "''");
       whereConditions.push(`RCSTATUSITEM = '${escapedRcStatus}'`);
+    }
+    
+    // Add tender progress/remarks filter (for DPDMIS overall tender status table)
+    if (tenderProgress) {
+      // Escape single quotes in tenderProgress
+      const escapedTenderProgress = tenderProgress.replace(/'/g, "''");
+      // Handle transformed TENDERSTATUS values (e.g., "New Items", "Price Opened Bid Not Found")
+      // Need to match against the transformed value in the subquery
+      // For "New Items", filter by TENDERSTATUS = 'NA'
+      // For "Price Opened Bid Not Found", filter by TENDERSTATUS = 'Price Opened' AND no bids
+      if (tenderProgress === 'New Items') {
+        whereConditions.push(`TENDERSTATUS = 'NA'`);
+      } else if (tenderProgress === 'Price Opened Bid Not Found') {
+        whereConditions.push(`TENDERSTATUS = 'Price Opened'`);
+        whereConditions.push(`(BIDFOUNDINCOVERA = 0 OR BIDFOUNDINCOVERA IS NULL)`);
+        whereConditions.push(`(BIDFOUNDINCOVERB = 0 OR BIDFOUNDINCOVERB IS NULL)`);
+        whereConditions.push(`(BIDFOUNDINCOVERC = 0 OR BIDFOUNDINCOVERC IS NULL)`);
+      } else {
+        // For other values, match directly against TENDERSTATUS
+        whereConditions.push(`TENDERSTATUS = '${escapedTenderProgress}'`);
+      }
     }
     
     // Add item status filter
@@ -100,11 +189,62 @@ async function exportTenderStatusItems(rcStatus, statusAction, cellType) {
     }
     // For Total Items, no EDL filter is added
     
-    // Build complete SQL query
-    const sqlQuery = `SELECT MCATEGORY, ITEMID, ITEMCODE, ITEMNAME, STRENGTH, UNIT, ISEDL2021, ISEDL2025, ITEMSTATUS, DAYREMAININGITEM FROM MV_tender_dashboard WHERE ${whereConditions.join(' AND ')}`;
+    // Add ABC category filter if clicking on ABC category cells
+    if (abcCategory && (cellType === 'A-Cat' || cellType === 'B-Cat' || cellType === 'C-Cat' || cellType === 'A-Category' || cellType === 'B-Category' || cellType === 'C-Category')) {
+      whereConditions.push(`ABCINDENTVALUE = '${abcCategory}'`);
+    }
     
+    // For "Total (A+B+C)" cell, filter by all ABC categories
+    if (cellType === 'Total (A+B+C)') {
+      whereConditions.push(`ABCINDENTVALUE IN ('A', 'B', 'C')`);
+    }
+    
+    // Build complete SQL query with columns matching template format
+    // Column order: Sr.No, RC Status, Days to be RC Expired, EDL Type, Code, Item Name, Strength, Unit,
+    // Tender Status, Tender Code, Start Date, End Date, Cover A DT, Claim Objection End DT,
+    // Bids A, Bids B, Bids C, DHS AI QTY, CME AI QTY, Total AI QTY, Total Indent Value,
+    // ABC On Indent Value, Value Parameter, ABC Indent Value, Item Type, Therapeutic Class, RC Start DT, RC End DT, Floated Tender
+    const sqlQuery = `SELECT 
+      ROW_NUMBER() OVER (ORDER BY RCSTATUSITEM, ITEMSTATUS, TENDERSTATUS, ITEMCODE) AS "Sr.No",
+      RCSTATUSITEM AS "RC Status",
+      DAYREMAININGITEM AS "Days to be RC Expired",
+      ISEDL2025 AS "EDL Type",
+      ITEMCODE AS "Code",
+      ITEMNAME AS "Item Name",
+      STRENGTH AS "Strength",
+      UNIT AS "Unit",
+      TENDERSTATUS AS "Tender Status",
+      SCHEMECODE AS "Tender Code",
+      TENDERSTARTDT AS "Start Date",
+      SUBMISSIONLASTDT AS "End Date",
+      COV_A_OPDATE AS "Cover A DT",
+      CLAIMOBJECTION_LAST AS "Claim Objection End DT",
+      BIDFOUNDINCOVERA AS "Bids A",
+      BIDFOUNDINCOVERB AS "Bids B",
+      BIDFOUNDINCOVERC AS "Bids C",
+      DHSAI_QTY AS "DHS AI QTY",
+      CMEAI_QTY AS "CME AI QTY",
+      TOTALAI_QTY AS "Total AI QTY",
+      ROUND(NVL(INDENTVALUEINRS, NVL(TOTALAI_QTY, 0) * NVL(RC_PRC_APPROXRATE, 0)) / 100000, 2) AS "Total Indent Value",
+      RC_PRC_APPROXRATE AS "ABC On Indent Value",
+      RC_PRC_APPROXRATE AS "Value Parameter",
+      ABCINDENTVALUE AS "ABC Indent Value",
+      ITEMTYPENAME AS "Item Type",
+      GROUPNAME AS "Therapeutic Class",
+      RCSTARTITEM AS "RC Start DT",
+      RCENDDTITEM AS "RC End DT",
+      LASTFLOATEDTENDERCODE AS "Floated Tender"
+    FROM MV_tender_dashboard WHERE ${whereConditions.join(' AND ')} ORDER BY RCSTATUSITEM, ITEMSTATUS, TENDERSTATUS, ITEMCODE`;
+    
+    console.log('=== Excel Export - Row-wise Filters ===');
+    console.log('RC Status filter:', rcStatus || 'None (all RC statuses)');
+    console.log('Tender Progress filter:', tenderProgress || 'None (all tender progress)');
+    console.log('Status Action filter:', statusAction || 'None (all statuses)');
+    console.log('Cell Type filter:', cellType);
+    console.log('ABC Category filter:', abcCategory || 'None (all ABC categories)');
+    console.log('WHERE conditions:', whereConditions);
     console.log('Direct SQL query:', sqlQuery);
-    console.log('Filters:', { rcStatus, statusAction, cellType });
+    console.log('========================================');
     
     // Call API with direct SQL - use same API URL as chat
     const apiUrl = process.env.REACT_APP_CHAT_API_URL || process.env.REACT_APP_API_BASE_URL || '';
@@ -243,9 +383,13 @@ async function exportTenderStatusItems(rcStatus, statusAction, cellType) {
     if (itemsData.length > 0 && Array.isArray(itemsData[0])) {
       console.log('Converting array of arrays to array of objects...');
       if (!columns) {
-        // Use required columns if columns not provided
-        columns = ['MCATEGORY', 'ITEMID', 'ITEMCODE', 'ITEMNAME', 'STRENGTH', 
-                  'UNIT', 'ISEDL2021', 'ISEDL2025', 'ITEMSTATUS', 'DAYREMAININGITEM'];
+        // Use required columns matching template format
+        columns = [
+          'Sr.No', 'RC Status', 'Days to be RC Expired', 'EDL Type', 'Code', 'Item Name', 'Strength', 'Unit',
+          'Tender Status', 'Tender Code', 'Start Date', 'End Date', 'Cover A DT', 'Claim Objection End DT',
+          'Bids A', 'Bids B', 'Bids C', 'DHS AI QTY', 'CME AI QTY', 'Total AI QTY', 'Total Indent Value',
+          'ABC On Indent Value', 'Value Parameter', 'ABC Indent Value', 'Item Type', 'Therapeutic Class', 'RC Start DT', 'RC End DT', 'Floated Tender'
+        ];
         console.log('Using default columns:', columns);
       }
       itemsData = itemsData.map(row => {
@@ -267,17 +411,19 @@ async function exportTenderStatusItems(rcStatus, statusAction, cellType) {
       console.log('First item keys:', Object.keys(itemsData[0]));
     }
     
-    // Required columns in exact order
+    // Required columns in exact order matching template format
     const requiredColumns = [
-      'MCATEGORY', 'ITEMID', 'ITEMCODE', 'ITEMNAME', 'STRENGTH', 
-      'UNIT', 'ISEDL2021', 'ISEDL2025', 'ITEMSTATUS', 'DAYREMAININGITEM'
+      'Sr.No', 'RC Status', 'Days to be RC Expired', 'EDL Type', 'Code', 'Item Name', 'Strength', 'Unit',
+      'Tender Status', 'Tender Code', 'Start Date', 'End Date', 'Cover A DT', 'Claim Objection End DT',
+      'Bids A', 'Bids B', 'Bids C', 'DHS AI QTY', 'CME AI QTY', 'Total AI QTY', 'Total Indent Value',
+      'ABC On Indent Value', 'Value Parameter', 'ABC Indent Value', 'Item Type', 'Therapeutic Class', 'RC Start DT', 'RC End DT', 'Floated Tender'
     ];
     
-    // Map items to required columns (data should already be in correct format from SQL)
+    // Map items to required columns (data should already be in correct format from SQL with aliases)
     const items = itemsData.map((item, index) => {
       const mappedItem = {};
       requiredColumns.forEach(col => {
-        // Try different case variations and column name formats
+        // Try exact match first, then case variations
         let value = item[col] || 
                    item[col.toUpperCase()] || 
                    item[col.toLowerCase()] ||
@@ -304,13 +450,25 @@ async function exportTenderStatusItems(rcStatus, statusAction, cellType) {
       throw new Error('No items found after processing.');
     }
     
-    console.log(`Exporting ${items.length} items to Excel`);
+    console.log(`Exporting ${items.length} items to Excel using template`);
     
-    // Generate Excel with specific columns
+    // Generate Excel from template with specific columns
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const cellTypeSafe = cellType.replace(/\s+/g, '_');
     const filename = `Tender_Status_${cellTypeSafe}_${timestamp}.xlsx`;
-    await generateExcelFromData(items, filename, requiredColumns);
+    
+    // Use template-based export (preserves formatting, styles, formulas)
+    await generateExcelFromTemplate(
+      items,
+      '/templates/Tender_Items_Template.xlsx',
+      filename,
+      requiredColumns,
+      {
+        sheetName: null, // Use first sheet
+        dataStartRow: 2, // Data starts at row 2 (row 1 has headers)
+        headerRow: 1
+      }
+    );
     
   } catch (error) {
     console.error('Error in exportTenderStatusItems:', error);
@@ -339,8 +497,11 @@ export function useMarkdownRenderer(containerRef, messages) {
       
       const isTenderStatusTable = headers.some(h => 
         h.includes('RC Status') || h.includes('RC_Status') || 
-        h.includes('Status Action') || h.includes('Status_Action') ||
-        h.includes('EDLs') || h.includes('Total Items') || h.includes('Total_Items')
+        h.includes('Status Action') || h.includes('Status_Action') || h.includes('Status/Action') ||
+        h.includes('EDLs') || h.includes('Total Items') || h.includes('Total_Items') ||
+        h.includes('A-Category') || h.includes('B-Category') || h.includes('C-Category') ||
+        h.includes('A- Cat') || h.includes('B- Cat') || h.includes('C- Cat') ||
+        h.includes('Total (A+B+C)')
       );
       
       if (isTenderStatusTable) {
@@ -348,10 +509,29 @@ export function useMarkdownRenderer(containerRef, messages) {
         const rcStatusIndex = headers.findIndex(h => 
           h.includes('RC Status') || h.includes('RC_Status')
         );
-        const statusActionIndex = headers.findIndex(h => 
-          h.includes('Status Action') || h.includes('Status_Action') || 
-          h.includes('Tender_Progress') || h.includes('Tender Progress')
-        );
+        // Find Tender Progress/Remarks column (separate from Status Action)
+        const tenderProgressIndex = headers.findIndex(h => {
+          const normalized = h.replace('/', ' ').replace('_', ' ');
+          return (
+            normalized.includes('Tender Progress') ||
+            normalized.includes('Tender_Progress') ||
+            normalized.includes('Tender Progress Remarks') ||
+            normalized.includes('Tender_Progress_Remarks') ||
+            (normalized.includes('Progress') && normalized.includes('Remarks'))
+          );
+        });
+        // Find Status Action column (separate from Tender Progress)
+        const statusActionIndex = headers.findIndex(h => {
+          const normalized = h.replace('/', ' ');
+          return (
+            h.includes('Status/Action') ||
+            h === 'Status/Action' ||
+            normalized.includes('Status Action') ||
+            normalized.includes('Status_Action') ||
+            normalized.includes('Status Action to be Taken') ||
+            normalized.includes('Status_Action_to_be_Taken')
+          );
+        });
         const edlsIndex = headers.findIndex(h => 
           (h.includes('EDLs') || h.includes('EDL')) && 
           !h.includes('Non') && !h.includes('Total')
@@ -363,32 +543,113 @@ export function useMarkdownRenderer(containerRef, messages) {
           h.includes('Total Items') || h.includes('Total_Items') || 
           (h.includes('Total') && h.includes('Item'))
         );
+        // Find ABC category column indices (flexible matching for "A- Cat on ABC", "B- Cat on ABC", "C- Cat on ABC", "A-Category", "B-Category", "C-Category", etc.)
+        // Must match pattern: A/B/C followed by "-" or " " and "Cat" or "CAT" or "Category", and optionally "on ABC" or "ABC"
+        const aCatIndex = headers.findIndex(h => {
+          const normalized = h.toUpperCase().trim();
+          // Match patterns like "A- Cat", "A Cat", "A-Cat", "A_Cat", "A- Cat on ABC", "A-Category", etc.
+          return ((normalized.startsWith('A') || normalized.includes(' A ')) && 
+                 (normalized.includes('CAT') || normalized.includes('ABC') || normalized.includes('CATEGORY'))) &&
+                 !normalized.includes('INDENT') && !normalized.includes('VALUE') && !normalized.includes('TOTAL');
+        });
+        const bCatIndex = headers.findIndex(h => {
+          const normalized = h.toUpperCase().trim();
+          // Match patterns like "B- Cat", "B Cat", "B-Cat", "B_Cat", "B- Cat on ABC", "B-Category", etc.
+          return ((normalized.startsWith('B') || normalized.includes(' B ')) && 
+                 (normalized.includes('CAT') || normalized.includes('ABC') || normalized.includes('CATEGORY'))) &&
+                 !normalized.includes('INDENT') && !normalized.includes('VALUE') && !normalized.includes('TOTAL');
+        });
+        const cCatIndex = headers.findIndex(h => {
+          const normalized = h.toUpperCase().trim();
+          // Match patterns like "C- Cat", "C Cat", "C-Cat", "C_Cat", "C- Cat on ABC", "C-Category", etc.
+          return ((normalized.startsWith('C') || normalized.includes(' C ')) && 
+                 (normalized.includes('CAT') || normalized.includes('ABC') || normalized.includes('CATEGORY'))) &&
+                 !normalized.includes('INDENT') && !normalized.includes('VALUE') && !normalized.includes('TOTAL');
+        });
+        // Find "Total (A+B+C)" column index
+        const totalAbcIndex = headers.findIndex(h => {
+          const normalized = h.toUpperCase().trim();
+          return (normalized.includes('TOTAL') && (normalized.includes('A+B+C') || normalized.includes('A+B+C'))) ||
+                 (normalized.includes('TOTAL') && normalized.includes('ABC'));
+        });
         
         const rows = table.querySelectorAll('tbody tr');
-        rows.forEach((row) => {
+        rows.forEach((row, rowIdx) => {
           const cells = Array.from(row.querySelectorAll('td'));
           
-          // Extract row data
+          // Extract row data - ensure we capture all cell values correctly
           const rowData = {};
           headers.forEach((header, idx) => {
             if (cells[idx]) {
-              rowData[header] = cells[idx].textContent.trim();
+              const cellValue = cells[idx].textContent.trim();
+              rowData[header] = cellValue;
+              // Also store with normalized key for easier lookup
+              rowData[header.trim()] = cellValue;
             }
           });
           
-          // Make EDLs cell clickable
+          // Extract actual filter values from cells directly (more reliable)
+          const rcStatusValue = (rcStatusIndex >= 0 && cells[rcStatusIndex]) ? cells[rcStatusIndex].textContent.trim() : null;
+          
+          // Skip GRAND TOTAL rows (rows where RC Status contains "GRAND TOTAL")
+          if (rcStatusValue && rcStatusValue.toUpperCase().includes('GRAND TOTAL')) {
+            return; // Skip this row
+          }
+          
+          const tenderProgressValue = (tenderProgressIndex >= 0 && cells[tenderProgressIndex]) ? cells[tenderProgressIndex].textContent.trim() : null;
+          const statusActionValue = (statusActionIndex >= 0 && cells[statusActionIndex]) ? cells[statusActionIndex].textContent.trim() : null;
+          
+          // Store row indices for debugging
+          rowData._rowIndex = rowIdx;
+          rowData._rcStatusIndex = rcStatusIndex;
+          rowData._statusActionIndex = statusActionIndex;
+          
+          // Store direct values in rowData for easier access
+          rowData._rcStatus = rcStatusValue;
+          rowData._tenderProgress = tenderProgressValue;
+          rowData._statusAction = statusActionValue;
+          
+          console.log(`Row ${rowIdx} data:`, {
+            rcStatus: rcStatusValue,
+            tenderProgress: tenderProgressValue,
+            statusAction: statusActionValue,
+            rowDataKeys: Object.keys(rowData),
+            headers: headers
+          });
+          
+          // Make EDLs cell clickable - pass direct values including tenderProgress
           if (edlsIndex >= 0 && cells[edlsIndex]) {
-            makeCellClickable(cells[edlsIndex], 'EDLs', rowData, headers, rcStatusIndex, statusActionIndex);
+            makeCellClickable(cells[edlsIndex], 'EDLs', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
           }
           
           // Make Non-EDLs cell clickable
           if (nonEdlsIndex >= 0 && cells[nonEdlsIndex]) {
-            makeCellClickable(cells[nonEdlsIndex], 'Non-EDLs', rowData, headers, rcStatusIndex, statusActionIndex);
+            makeCellClickable(cells[nonEdlsIndex], 'Non-EDLs', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
           }
           
           // Make Total Items cell clickable
           if (totalItemsIndex >= 0 && cells[totalItemsIndex]) {
-            makeCellClickable(cells[totalItemsIndex], 'Total Items', rowData, headers, rcStatusIndex, statusActionIndex);
+            makeCellClickable(cells[totalItemsIndex], 'Total Items', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
+          }
+          
+          // Make A-Cat cell clickable
+          if (aCatIndex >= 0 && cells[aCatIndex]) {
+            makeCellClickable(cells[aCatIndex], 'A-Cat', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
+          }
+          
+          // Make B-Cat cell clickable
+          if (bCatIndex >= 0 && cells[bCatIndex]) {
+            makeCellClickable(cells[bCatIndex], 'B-Cat', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
+          }
+          
+          // Make C-Cat cell clickable
+          if (cCatIndex >= 0 && cells[cCatIndex]) {
+            makeCellClickable(cells[cCatIndex], 'C-Cat', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
+          }
+          
+          // Make Total (A+B+C) cell clickable (for ABC category table)
+          if (totalAbcIndex >= 0 && cells[totalAbcIndex]) {
+            makeCellClickable(cells[totalAbcIndex], 'Total (A+B+C)', rowData, headers, rcStatusIndex, tenderProgressIndex, statusActionIndex, rcStatusValue, tenderProgressValue, statusActionValue);
           }
         });
       }
@@ -442,4 +703,3 @@ export function useMarkdownRenderer(containerRef, messages) {
     });
   }
 }
-

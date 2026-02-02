@@ -258,3 +258,187 @@ export async function generateExcelFromResponse(responseText, filename = 'CGMSCL
   }
 }
 
+/**
+ * Generate Excel from template file and populate with data
+ * @param {Array} data - Array of objects with data
+ * @param {string} templatePath - Path to template file in public folder
+ * @param {string} filename - Output filename
+ * @param {Array} columnOrder - Array of column names in the order they appear in template
+ * @param {Object} options - Options for template population
+ * @param {string} options.sheetName - Sheet name to populate (default: first sheet)
+ * @param {number} options.dataStartRow - Row number where data starts (default: 2, assuming row 1 has headers)
+ * @param {number} options.headerRow - Row number with headers (default: 1)
+ */
+export async function generateExcelFromTemplate(
+  data, 
+  templatePath = '/templates/Tender_Items_Template.xlsx',
+  filename = 'CGMSCL_Query_Results.xlsx',
+  columnOrder = null,
+  options = {}
+) {
+  try {
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      throw new Error('No data provided or data is empty');
+    }
+
+    // Load XLSX library
+    const XLSX = await loadXLSXLibrary();
+    
+    // Load template file
+    const response = await fetch(templatePath);
+    if (!response.ok) {
+      throw new Error(`Template file not found: ${templatePath}. Status: ${response.status}`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // Read template workbook with cell styles preserved
+    const workbook = XLSX.read(arrayBuffer, { 
+      type: 'array',
+      cellStyles: true, // Preserve styles
+      cellDates: true,  // Handle dates
+      sheetStubs: true  // Preserve empty cells
+    });
+    
+    // Get worksheet (default to first sheet or specified sheet name)
+    const sheetName = options.sheetName || workbook.SheetNames[0];
+    if (!workbook.Sheets[sheetName]) {
+      throw new Error(`Sheet "${sheetName}" not found in template. Available sheets: ${workbook.SheetNames.join(', ')}`);
+    }
+    
+    const worksheet = workbook.Sheets[sheetName];
+    
+    // Determine data start row (default: row 2, row 1 = headers)
+    const dataStartRow = options.dataStartRow || 2;
+    const headerRow = options.headerRow || 1;
+    
+    console.log('Template processing:', {
+      sheetName,
+      dataStartRow,
+      headerRow,
+      dataLength: data.length,
+      columnOrder
+    });
+    
+    // If column order is provided, use it; otherwise infer from first data object
+    const columns = columnOrder || Object.keys(data[0]);
+    
+    // Apply blue background color to header row
+    const headerRowIndex = headerRow - 1; // Convert to 0-indexed
+    const blueFillStyle = {
+      fill: {
+        fgColor: { rgb: "4472C4" } // Blue color (Excel standard blue)
+      },
+      font: {
+        color: { rgb: "FFFFFF" }, // White text for better contrast
+        bold: true
+      },
+      alignment: {
+        horizontal: "center",
+        vertical: "center"
+      }
+    };
+    
+    // Apply blue background to all header cells
+    columns.forEach((colName, colIndex) => {
+      const headerCellAddress = XLSX.utils.encode_cell({ 
+        r: headerRowIndex, 
+        c: colIndex 
+      });
+      const headerCell = worksheet[headerCellAddress];
+      
+      // Merge existing style with blue background
+      if (headerCell) {
+        worksheet[headerCellAddress].s = {
+          ...headerCell.s,
+          ...blueFillStyle,
+          // Preserve other existing styles
+          border: (headerCell.s && headerCell.s.border) || {},
+          numFmt: (headerCell.s && headerCell.s.numFmt) || undefined
+        };
+      } else {
+        // If header cell doesn't exist, create it with blue background
+        worksheet[headerCellAddress] = {
+          t: 's',
+          v: colName,
+          s: blueFillStyle
+        };
+      }
+    });
+    
+    // Write data rows
+    data.forEach((item, rowIndex) => {
+      const excelRow = dataStartRow + rowIndex - 1; // Excel is 0-indexed
+      
+      columns.forEach((colName, colIndex) => {
+        const cellAddress = XLSX.utils.encode_cell({ 
+          r: excelRow, 
+          c: colIndex 
+        });
+        
+        // Get value from item
+        let value = item[colName];
+        if (value === null || value === undefined) {
+          value = '';
+        }
+        
+        // Preserve existing cell style if present
+        const existingCell = worksheet[cellAddress];
+        
+        // Determine cell type
+        let cellType = 's'; // string by default
+        if (typeof value === 'number') {
+          cellType = 'n';
+        } else if (value instanceof Date) {
+          cellType = 'd';
+        }
+        
+        // Create new cell with preserved style
+        worksheet[cellAddress] = {
+          t: cellType,
+          v: value,
+          s: (existingCell && existingCell.s) || {} // Preserve existing style
+        };
+      });
+    });
+    
+    // Update worksheet range if needed
+    const currentRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    const lastRow = Math.max(currentRange.e.r, dataStartRow + data.length - 2);
+    const lastCol = Math.max(currentRange.e.c, columns.length - 1);
+    worksheet['!ref'] = XLSX.utils.encode_range({
+      s: { r: 0, c: 0 },
+      e: { r: lastRow, c: lastCol }
+    });
+    
+    // Update worksheet in workbook
+    workbook.Sheets[sheetName] = worksheet;
+    
+    // Generate Excel file with styles preserved
+    const excelBuffer = XLSX.write(workbook, {
+      type: 'array',
+      bookType: 'xlsx',
+      cellStyles: true
+    });
+    
+    // Download file
+    const blob = new Blob([excelBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    console.log(`Excel file generated from template: ${filename}`);
+    return true;
+    
+  } catch (error) {
+    console.error('Error generating Excel from template:', error);
+    throw error;
+  }
+}
