@@ -47,7 +47,7 @@ export const globalPromptCards = [
       'Provide the overall tender status of drugs including RC Status',
           'Clarification Received or Dava Apatti or under Claim objection',
           'Cover A tender status',
-          'Price Opened  or Price Bid Opened & Bid found, Under Price Bid ,not finalized'
+          'Price Opened  or Price Bid Opened & Bid found, Under Price Bid ,not finalized',
       'Show items whose RC expires soon (<90 days)',
       'List the worst performing tenders',
       'What is the average time taken for a tender from start to finish'
