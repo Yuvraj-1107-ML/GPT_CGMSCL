@@ -38,13 +38,16 @@ export const globalPromptCards = [
     prompts: [
       'provide the overall tender status of drugs on dpdmis also add grand total end in the last row',
       'provide the overall tender status of drugs which indent received',
-      'annual indent received drugs tender status of DHS',
+      'provide the overall tender status of drugs which indent received from DHS',
       'provide the overall tender status of drugs which indent received from CME',
       'provide ABC category drugs in the overall tender status',
       'provide ABC category A Drugs in the overall tender status',
       'Tender/RC status of Anti Rabies',
       'Live in Tender or Tender is in live,floated tender which is live',
       'Provide the overall tender status of drugs including RC Status',
+          'Clarification Received or Dava Apatti or under Claim objection',
+          'Cover A tender status',
+          'Price Opened  or Price Bid Opened & Bid found, Under Price Bid ,not finalized'
       'Show items whose RC expires soon (<90 days)',
       'List the worst performing tenders',
       'What is the average time taken for a tender from start to finish'
